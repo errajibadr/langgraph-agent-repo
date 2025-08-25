@@ -4,4 +4,24 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "dotenv>=0.9.9",
+]
+
+[tool.uv]
+# package = true
+
+# [tool.uv.build-backend]
+# module-root = "packages"
+
+[tool.uv.sources]
+shared = { path = "packages/shared" }
+ai_engine = { workspace = true }
+frontend = { workspace = true }
+backend = { workspace = true }
+
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["packages/shared"]
+
