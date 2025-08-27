@@ -33,7 +33,7 @@ class WeatherResponse(BaseModel):
 
 
 def summarizer_agent(state: StateSchema) -> dict:
-    response = llm.with_structured_output(WeatherResponse).invoke(state["messages"][-1].content)
+    response: WeatherResponse = llm.with_structured_output(WeatherResponse).invoke(state["messages"][-1].content)  # type: ignore
     return {
         "messages": [
             {
@@ -62,11 +62,13 @@ if __name__ == "__main__":
     #     print(chunk)
     #     print("--------------------------------")
     # print(response["messages"][-1])
-    for chunk in compiled_graph.stream(
+    for stream_mode, chunk in compiled_graph.stream(
         {"messages": [{"role": "user", "content": "What is the weather in Tokyo?"}]}, stream_mode=["messages", "custom"]
     ):
-        print("--------------------------------")
+        print("-----------chunk-------------")
         print(chunk)
+        print("-----------metadata------------")
+        print(stream_mode)
         print("--------------------------------")
     # print(
     #     compiled_graph.invoke({"messages": [{"role": "user", "content": "What is the weather in Tokyo?"}]})["messages"]
