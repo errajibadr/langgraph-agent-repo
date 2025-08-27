@@ -1,107 +1,142 @@
-# Multi-Provider LLM Frontend
+# Frontend Package
 
-A Streamlit-based web interface for testing and interacting with multiple LLM providers using the CustomChatModel.
+A modular Streamlit application for testing and interacting with different LLM providers.
 
-## Features
+## 🏗️ Package Structure
 
-- 🔄 **Multi-Provider Support**: Switch between LLMaaS, LLMaaS Dev, and Custom providers
-- 🔍 **Model Discovery**: Automatically fetch available models from each provider's API
-- ⚙️ **Environment Integration**: Automatically loads configuration from environment variables
-- 💬 **Interactive Chat**: Real-time chat interface with your selected LLM
-- 🧪 **Connection Testing**: Test provider connections before starting a chat session
-
-## Quick Start
-
-### 1. Installation
-
-The frontend package should be installed as part of the main project. If running independently:
-
-```bash
-uv add streamlit requests python-dotenv ai-engine
+```
+frontend/
+├── components/              # 🎨 UI Components
+│   ├── __init__.py         # Component exports
+│   ├── chat.py             # Chat interface component
+│   ├── configuration.py    # LLM settings & example configs
+│   ├── provider.py         # Provider selection & model management
+│   └── sidebar.py          # Complete sidebar orchestration
+├── services/               # ⚙️ Business Logic Services  
+│   ├── __init__.py         # Service exports
+│   ├── api.py              # API calls for model fetching
+│   ├── model.py            # Model connection & management
+│   └── session.py          # Streamlit session state management
+└── app.py                  # 🚀 Main entry point (37 lines!)
 ```
 
-### 2. Configuration
+## 📦 What's Included
 
-Set up your environment variables for the providers you want to use:
+### **Services** (`frontend.services`)
+- **`api.py`**: External API calls (fetch models from OpenAI-compatible endpoints)
+- **`session.py`**: Streamlit session state initialization and management  
+- **`model.py`**: LLM model connection, auto-connect logic, and session updates
 
-#### LLMaaS Provider
+### **Components** (`frontend.components`)
+- **`provider.py`**: Provider selection dropdown and model selection interface
+- **`configuration.py`**: LLM parameter controls (temperature, top_p, max_tokens) and help documentation
+- **`chat.py`**: Main chat interface with message history and response generation
+- **`sidebar.py`**: Complete sidebar orchestration combining all provider configuration
+
+### **Main Application** (`app.py`)
+- Clean, focused entry point that orchestrates all components
+- **575+ lines → 37 lines** 🎉
+
+## 🚀 Usage
+
+### Running the Application
 ```bash
-export LLM_PROVIDER=llmaas
-export LLMAAS_API_KEY=your_api_key_here
-export LLMAAS_BASE_URL=https://api.llmaas.com/v1
-export LLMAAS_MODEL_NAME=llama33-70b-instruct
-```
-
-#### LLMaaS Dev Provider
-```bash
-export LLM_PROVIDER=llmaas_dev
-export LLMAAS_DEV_API_KEY=your_dev_api_key_here
-export LLMAAS_DEV_BASE_URL=https://dev.api.llmaas.com/v1
-export LLMAAS_DEV_MODEL_NAME=llama33-70b-instruct
-```
-
-#### Custom Provider (e.g., OpenAI)
-```bash
-export LLM_PROVIDER=custom
-export API_KEY=your_openai_api_key_here
-export BASE_URL=https://api.openai.com/v1
-export MODEL_NAME=gpt-3.5-turbo
-```
-
-### 3. Running the Frontend
-
-```bash
+# From project root
 uv run frontend
+
+# Or with Streamlit directly  
+streamlit run packages/frontend/src/frontend/app.py
 ```
 
-This will start the Streamlit application at `http://localhost:8501`
+### Import Structure
+```python
+# Clean component imports
+from frontend.components import render_chat_interface, render_sidebar
+from frontend.services import init_session_state
 
-## Usage
+# Individual component imports
+from frontend.components.provider import render_provider_selector
+from frontend.services.api import fetch_models_from_api
+```
 
-1. **Select Provider**: Choose your LLM provider from the sidebar dropdown
-2. **Configure Settings**: Enter or verify your API credentials and endpoints
-3. **Fetch Models**: Click "Fetch Available Models" to see what models are available
-4. **Test Connection**: Verify your configuration works with "Test Connection"
-5. **Start Chatting**: Once connected, use the chat interface to interact with your LLM
+## 🔧 Configuration
 
-## Environment Variables
+The frontend integrates with the `core` package for:
+- **Provider Types**: `ProviderType` enum (LLMaaS, LLMaaS Dev, Custom)
+- **Configuration**: Environment variable handling and provider configs
+- **Settings**: LLM generation parameters and validation
 
-The frontend automatically loads configuration from environment variables:
+### Environment Variables
 
-| Provider | API Key | Base URL | Model Name |
-|----------|---------|----------|------------|
-| LLMaaS | `LLMAAS_API_KEY` | `LLMAAS_BASE_URL` | `LLMAAS_MODEL_NAME` |
-| LLMaaS Dev | `LLMAAS_DEV_API_KEY` | `LLMAAS_DEV_BASE_URL` | `LLMAAS_DEV_MODEL_NAME` |
-| Custom | `API_KEY` | `BASE_URL` | `MODEL_NAME` |
+See the [core package documentation](../shared/README.md) for complete environment variable reference.
 
-You can also set `LLM_PROVIDER` to automatically select the default provider.
-
-## Troubleshooting
-
-### Connection Issues
-- Verify your API key is correct and has the necessary permissions
-- Ensure the base URL is accessible and ends with `/v1` for OpenAI-compatible APIs
-- Check that the model name exists on the provider's platform
-
-### Import Errors
-- Make sure the `ai-engine` package is installed and accessible
-- Verify you're running from the correct Python environment
-
-### Model Fetching Issues
-- Some providers may not support the `/v1/models` endpoint
-- In such cases, manually enter the model name in the text input field
-
-## Development
-
-To run the Streamlit app directly for development:
-
+**Quick Setup:**
 ```bash
-streamlit run packages/frontend/app.py
+# For Custom provider (OpenAI-compatible)
+export API_KEY=your_api_key
+export BASE_URL=https://api.openai.com/v1
+export MODEL_NAME=gpt-4  # Optional - defaults to "gpt-5-mini"
+
+# Optional LLM settings
+export TEMPERATURE=0.7
+export MAX_TOKENS=1000
+# export TOP_P=0.9  # Optional - disabled by default
 ```
 
-## Dependencies
+## 🎯 Key Features
 
-- `streamlit>=1.28.0`: Web interface framework
-- `requests>=2.31.0`: HTTP client for API calls
-- `python-dotenv>=1.0.0`: Environment variable loading
-- `ai-engine`: Custom chat model implementation
+### **Auto-Connect Behavior**
+- ✅ **Auto-fetch models** when provider changes and credentials are available
+- ✅ **Auto-connect** when model is selected or LLM parameters change  
+- ✅ **Real-time updates** with visual feedback in chat interface
+
+### **Session Management**
+- ✅ **Persistent model selection** across provider changes
+- ✅ **Chat history** maintained throughout session
+- ✅ **Configuration tracking** to detect changes and trigger reconnection
+
+### **UI/UX Enhancements**  
+- ✅ **Collapsible sections** for clean organization
+- ✅ **Environment variable hints** with clear labeling
+- ✅ **Provider-specific defaults** for smooth experience
+- ✅ **Optional top_p parameter** (disabled by default for compatibility)
+
+## 🔄 Migrating from Old Structure
+
+The refactoring maintains **100% API compatibility**. All functionality remains the same, just better organized:
+
+| **Old Location** | **New Location** | **Change** |
+|------------------|------------------|------------|
+| `app.py` (575+ lines) | Multiple files | Broken into logical components |
+| All functions in one file | `services/` + `components/` | Separated by responsibility |
+| Monolithic imports | Clean, targeted imports | Better dependency management |
+
+## 🧪 Testing
+
+With the modular structure, you can now test components individually:
+
+```python
+# Test API service
+from frontend.services.api import fetch_models_from_api
+
+# Test UI components  
+from frontend.components.provider import render_provider_selector
+
+# Test session management
+from frontend.services.session import init_session_state
+```
+
+## 🎨 Adding New Components
+
+Follow the established patterns:
+
+1. **Services**: Add to `services/` for business logic
+2. **Components**: Add to `components/` for UI elements  
+3. **Export**: Update `__init__.py` files for clean imports
+4. **Import**: Use in `app.py` or other components as needed
+
+## 🔗 Dependencies
+
+- **Core Dependencies**: `streamlit`, `requests`, `python-dotenv`
+- **Internal Dependencies**: `ai-engine` (model wrapper), `core` (settings & types)
+- **Architecture**: Modular, service-oriented design following Streamlit best practices
