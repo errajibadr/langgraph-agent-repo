@@ -1,16 +1,17 @@
 [project]
-name = "shared"
+name = "core"
 version = "0.1.0"
-description = "Add your description here"
+description = "Core business logic, models, and shared utilities"
 readme = "README.md"
 authors = [
     { name = "errajibadr", email = "errajibadr95@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
-
-[project.scripts]
-shared = "shared:main"
+dependencies = [
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]

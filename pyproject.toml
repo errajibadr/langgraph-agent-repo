@@ -15,7 +15,7 @@ package = false
 # module-root = "packages"
 
 [tool.uv.sources]
-shared = { path = "packages/shared" }
+core = { workspace = true }
 ai_engine = { workspace = true }
 frontend = { workspace = true }
 backend = { workspace = true }
@@ -23,7 +23,6 @@ backend = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
-exclude = ["packages/shared"]
 
 [dependency-groups]
 dev = [
