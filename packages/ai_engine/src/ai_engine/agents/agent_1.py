@@ -1,5 +1,6 @@
 from typing import Annotated
 
+from ai_engine.utils.tools import get_weather
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
@@ -7,7 +8,6 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 from typing_extensions import TypedDict
-from utils.tools import get_weather
 
 load_dotenv()
 
