@@ -7,22 +7,31 @@ help: ## Show this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-# Installation targets
+
+
 install-deps: ## Install all project dependencies
-	uv sync
+	uv sync --all-packages
+# Installation targets
+i: install-deps ## Alias for install-deps target
 
 install-frontend: ## Install frontend dependencies
-	cd packages/frontend && uv sync
+	uv sync --package frontend
+i/f: install-frontend
 
 install-ai-engine: ## Install ai-engine dependencies
-	cd packages/ai_engine && uv sync
+	uv sync --package ai_engine
+i/ai: install-ai-engine
+
+
 
 # Frontend targets
 frontend: ## Launch the Streamlit frontend interface
 	uv run frontend
+f: frontend
 
 dev-frontend: ## Run frontend in development mode with auto-reload
-	cd packages/frontend && streamlit run app.py --server.runOnSave true
+	cd packages/frontend && streamlit run src/frontend/app.py --server.runOnSave true
+dev/f: dev-frontend
 
 # Testing targets
 test: ## Run all tests
