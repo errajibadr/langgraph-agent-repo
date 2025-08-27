@@ -17,11 +17,18 @@ class ProviderType(str, Enum):
 class BaseProviderSettings(BaseSettings):
     """Base settings for LLM providers with common configuration."""
 
+    model_config = SettingsConfigDict(case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    # Provider settings
     api_key: Optional[str] = Field(default=None, description="API key for the LLM provider")
     base_url: Optional[str] = Field(default=None, description="Base URL for the LLM provider API")
     model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
 
-    model_config = SettingsConfigDict(case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    # LLM generation settings
+    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature (0.0 to 2.0)")
+    top_p: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Nucleus sampling probability (None = disabled)"
+    )
+    max_tokens: Optional[int] = Field(default=1000, ge=1, le=4096, description="Maximum tokens in response")
 
     @field_validator("api_key", "base_url", "model_name", mode="before")
     @classmethod
@@ -37,6 +44,8 @@ class LLMaaSSettings(BaseProviderSettings):
         env_prefix="LLMAAS_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
+    model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+
 
 class LLMaaSDevSettings(BaseProviderSettings):
     """Settings for LLMaaS Development provider."""
@@ -45,6 +54,8 @@ class LLMaaSDevSettings(BaseProviderSettings):
         env_prefix="LLMAAS_DEV_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
+    model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+
 
 class CustomProviderSettings(BaseProviderSettings):
     """Settings for Custom provider."""
@@ -52,6 +63,8 @@ class CustomProviderSettings(BaseProviderSettings):
     model_config = SettingsConfigDict(
         env_prefix="", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
+
+    model_name: Optional[str] = Field(default="gpt-5-mini", description="Name of the model to use")
 
 
 class MultiProviderSettings(BaseSettings):
@@ -131,8 +144,21 @@ class CustomChatModel(ChatOpenAI):
         if provider_settings.model_name is not None:
             config["model"] = provider_settings.model_name  # ChatOpenAI uses 'model', not 'model_name'
 
-        # Override with any provided kwargs
-        config.update(kwargs)
+        # Add LLM generation settings
+        if provider_settings.temperature is not None:
+            config["temperature"] = provider_settings.temperature
+        if provider_settings.top_p is not None:
+            config["top_p"] = provider_settings.top_p
+        if provider_settings.max_tokens is not None:
+            config["max_tokens"] = provider_settings.max_tokens
+
+        # Override with any provided kwargs (filter None values for optional params)
+        for key, value in kwargs.items():
+            if key == "top_p" and value is None:
+                # Skip None top_p values to avoid passing None to ChatOpenAI
+                config.pop("top_p", None)
+            else:
+                config[key] = value
 
         # Validate required parameters
         self._validate_required_config(config, multi_settings.provider)
@@ -168,8 +194,15 @@ class CustomChatModel(ChatOpenAI):
     def _safe_config_for_logging(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Return a safe version of config for logging (with masked sensitive data)."""
         safe_config = config.copy()
+
+        # Mask sensitive API key
         if "api_key" in safe_config and safe_config["api_key"]:
             safe_config["api_key"] = safe_config["api_key"][:8] + "..." if len(safe_config["api_key"]) > 8 else "***"
+
+        # Keep only relevant fields for logging
+        relevant_fields = ["api_key", "base_url", "model", "temperature", "top_p", "max_tokens"]
+        safe_config = {k: v for k, v in safe_config.items() if k in relevant_fields}
+
         return safe_config
 
 
