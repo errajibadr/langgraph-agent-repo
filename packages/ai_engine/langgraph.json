@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "chat": "ai_engine.agents.agent_1:graph",
+    "scratch": "ai_engine.agents.scratch_agent:graph"
+  }
+}

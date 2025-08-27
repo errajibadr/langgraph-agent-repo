@@ -26,6 +26,7 @@ members = ["packages/*"]
 
 [dependency-groups]
 dev = [
+    "langgraph-cli[inmem]>=0.4.0",
     "watchdog>=6.0.0",
 ]
 

@@ -12,3 +12,5 @@ wheels/
 .venv
 
 exploration.md
+
+.langgraph_api/*

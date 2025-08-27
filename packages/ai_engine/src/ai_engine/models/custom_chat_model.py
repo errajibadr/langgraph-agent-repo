@@ -33,7 +33,7 @@ class CustomChatModel(ChatOpenAI):
             provider="custom",
             api_key="your_key",
             base_url="https://api.example.com",
-            model="gpt-3.5-turbo"
+            model="gpt-5-nano"
         )
 
         # Using provider-specific constructor
