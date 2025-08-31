@@ -14,3 +14,5 @@ wheels/
 exploration.md
 
 .langgraph_api/*
+*.langgraph*
+langgraph.db*

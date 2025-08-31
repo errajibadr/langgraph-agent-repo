@@ -166,3 +166,112 @@ Long term memory is State memory that is kept for a given `object`(generally Use
 ```python
 graph = StateGraph(StateSchema)
 ```
+
+## Langgraph Platform : 
+
+Langgraph SDK --> create agents which are the graph.py:graph_agents
+
+langgraph platform --> Deploy agents to langgraph Server
+comes w/ streamling/Human in the loop/ Short term/Long term memory management.
++ cron features / Background agents / Double texting + "Assistant" feature
+
+Server architecture is as follows :
+task worker + http worker (to communicate with client)
+Redis pub/sub for workers to communicate with each other
+Postgres for state management & persistence
+
+Langgraph Client --> communicate with server/ Run "remote graphs" 
+
+Langgraph CLI --> helps buildng some "DOCKER" image for the server.
+
+Server can be either fully managed / BYOC / self-hosted
+
+--> I want to deep dive into thep "Assistant" feature + Cli Docker image creationx@
+Langgraph
+
+### Build Docker image : 
+
+```
+langgraph build -t langgraph-server:latest
+```
+
+you need to have the configuration file in the root of the project.
+```langgraph.json
+{
+  "python_version": "3.12",
+  "dependencies": [".", "../core"],
+  "graphs": {
+    "chat": "ai_engine.agents.agent_1:graph",
+    "scratch": "ai_engine.agents.scratch_agent:graph",
+    "joker": "ai_engine.agents.scratch_agent_map_reduce:compiled_joke_graph"
+  },
+  "image_distro": "wolfi"
+}
+```
+
+it still needs Redis & Postgres to be running.
+so a docker compose file is needed to run the server.
+```docker-compose.yaml
+volumes:
+    langgraph-data:
+        driver: local
+services:
+    langgraph-redis:
+        image: redis:6
+    langgraph-postgres:
+        image: postgres:16
+    langgraph-api:
+        image: "{built_image_name}:latest"
+        ports:
+            - "8123:8000"
+        depends_on:
+            - langgraph-redis
+            - langgraph-postgres
+```
+and define POSTGRES_URI & REDIS_URI in the environment variables.
+and Atleast LANGSMITH_API_KEY or LANGGRAPH_CLOUD_LICENSE_KEY
+
+### Run Client : 
+
+```python
+from langgraph_sdk.client import get_client
+
+url_for_cli_deployment = "http://localhost:8123"
+client = get_client(url=url_for_cli_deployment)
+```
+
+There is also the "RemoteGraph" concept which
+allows you to import a graph from langgraph library.
+```Remote Graph : 
+graph = RemoteGraph("graph_name", url)
+```
+
+We can execute the graph by "running" it remotely.
+Fire and forget - async API 
+blocking / Polling - sync/Async API
+
+
+### Double texting : 
+
+4 strategies allowed in Langgraph server when calling run.stream 
+
+Reject Interrupt Enqueue Rollback 
+
+Reject --> interrupt is rejected and the run is continued.
+Interrupt --> The run is interrupted (tools & messages history kept) and a new run is created.
+Enqueue --> interrupt is enqueued and thread emits second run with euqueued message.
+Rollback --> current run is rolled back and a new run is created.
+
+### Assistants : 
+Assistant is a graph but with custom configraution to customize it's behavior.
+
+Usually done with context and 
+accessed in nodes
+
+```python
+def node(state: State, runtime: Runtime[ContextSchema]):
+    runtime.context == {"model":"custom", "system_prompt":"this is a custom system prompt"}
+    ...
+    return state
+```
+

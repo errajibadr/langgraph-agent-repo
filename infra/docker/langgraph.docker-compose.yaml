@@ -1,0 +1,45 @@
+volumes:
+    langgraph-data:
+        driver: local
+services:
+    langgraph-redis:
+        image: redis:6
+        healthcheck:
+            test: redis-cli ping
+            interval: 5s
+            timeout: 1s
+            retries: 5
+        ports:
+            - "6379:6379"
+    langgraph-postgres:
+        image: postgres:16
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_DB: postgres
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        volumes:
+            - langgraph-data:/var/lib/postgresql/data
+        healthcheck:
+            test: pg_isready -U postgres
+            start_period: 10s
+            timeout: 1s
+            retries: 5
+            interval: 5s
+    langgraph-api:
+        image: "langgraph-server:latest"
+        ports:
+            - "8123:8000"
+        depends_on:
+            langgraph-redis:
+                condition: service_healthy
+            langgraph-postgres:
+                condition: service_healthy
+        environment:
+            REDIS_URI: redis://langgraph-redis:6379
+            OPENAI_API_KEY: $OPENAI_API_KEY
+            API_KEY: $API_KEY
+            BASE_URL: https://api.openai.com/v1
+            LANGSMITH_API_KEY: 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
+            POSTGRES_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable

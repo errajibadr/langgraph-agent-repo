@@ -76,3 +76,13 @@ setup-env: ## Set up development environment
 	@echo "   export MODEL_NAME=gpt-3.5-turbo"
 	@echo "3. Run frontend:"
 	@echo "   make frontend"
+
+
+docker/langgraph-up:
+	@docker compose -f infra/docker/langgraph.docker-compose.yaml --env-file .env -p langgraph-selfhosted up -d
+lup: docker/langgraph-up
+
+## Stop LangGraph services  
+docker/langgraph-down:
+	@docker compose -f infra/docker/langgraph.docker-compose.yaml --env-file .env -p langgraph-selfhosted down
+ldown: docker/langgraph-down

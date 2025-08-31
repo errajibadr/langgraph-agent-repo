@@ -58,6 +58,9 @@ def generate_subjects(state: GlobalStateSchema) -> GlobalStateSchema:
             )
         ]
     )
+
+    print(response)
+    print(response.subjects)
     return {"subjects": response.subjects}
 
 
@@ -103,7 +106,7 @@ def generate_response(state: GlobalStateSchema):
 joke_graph = StateGraph(GlobalStateSchema, input_schema=InputState, output_schema=OutputState)
 joke_graph.add_node("identify_topic", identify_topic)
 joke_graph.add_node("generate_subjects", generate_subjects)
-joke_graph.add_node("continue_to_jokes", continue_to_jokes)
+
 joke_graph.add_node("generate_joke", generate_joke)
 joke_graph.add_node("find_best_joke", find_best_joke)
 joke_graph.add_node("generate_response", generate_response)
@@ -116,7 +119,7 @@ joke_graph.add_edge("find_best_joke", "generate_response")
 joke_graph.add_edge("generate_response", END)
 
 
-compiled_joke_graph = joke_graph.compile(checkpointer=MemorySaver())
+compiled_joke_graph = joke_graph.compile()
 
 
 if __name__ == "__main__":
