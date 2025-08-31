@@ -147,7 +147,19 @@ def create_chat_model(provider: Union[str, ProviderType], **kwargs) -> CustomCha
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+    from langchain_core.messages import HumanMessage
+    from pydantic import BaseModel
 
     load_dotenv()
 
-    CustomChatModel()
+    class Summary(BaseModel):
+        summary: str
+
+    # result = CustomChatModel().with_structured_output(Summary).invoke([HumanMessage("What is the weather in Tokyo?")])
+
+    from langchain_google_vertexai.chat_models import ChatVertexAI
+
+    result = ChatVertexAI(model_name="gemini-2.5-flash", location="europe-west9", project="sandbox-467809").invoke(
+        [HumanMessage("What is the weather in Tokyo?")]
+    )
+    print(result)

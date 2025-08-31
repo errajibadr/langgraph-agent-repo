@@ -5,10 +5,15 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import AnyMessage, BaseMessage, add_messages
+from pydantic import BaseModel
 from typing_extensions import TypedDict
 
 
 class GlobalStateSchema(TypedDict):
+    messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
+
+
+class GlobalStatePydantic(BaseModel):
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
 
 
