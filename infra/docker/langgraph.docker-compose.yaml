@@ -41,5 +41,5 @@ services:
             OPENAI_API_KEY: $OPENAI_API_KEY
             API_KEY: $API_KEY
             BASE_URL: https://api.openai.com/v1
-            LANGSMITH_API_KEY: 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
+            LANGSMITH_API_KEY: $LANGSMITH_API_KEY
             POSTGRES_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable

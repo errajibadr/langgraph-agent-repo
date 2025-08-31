@@ -1,0 +1,21 @@
+# Gitleaks configuration to prevent API key leaks
+[extend]
+useDefault = true
+
+[[rules]]
+id = "langsmith-api-key"
+description = "LangSmith API Key"
+regex = '''lsv2_pt_[a-zA-Z0-9]{32}_[a-zA-Z0-9]{10}'''
+keywords = ["lsv2_pt_"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{48}'''
+keywords = ["sk-"]
+
+[[rules]]
+id = "hardcoded-secrets"
+description = "Hardcoded secrets in docker files"
+regex = '''(API_KEY|SECRET|TOKEN|PASSWORD)\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}["\']?'''
+path = '''.*\.(yaml|yml|json|toml)$'''
