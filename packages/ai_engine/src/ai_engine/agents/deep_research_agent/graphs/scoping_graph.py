@@ -44,7 +44,8 @@ def write_research_brief(state: ResearchAgentState):
 
 
 def get_scoping_graph():
-    graph = StateGraph(ResearchAgentState, input_schema=ResearchAgentInputState, output_schema=ResearchAgentOutputState)
+    graph = StateGraph(ResearchAgentState, input_schema=ResearchAgentInputState)
+    # output_schema=ResearchAgentOutputState)
 
     graph.add_node("clarify_with_user", clarify_with_user)
     graph.add_node("write_research_brief", write_research_brief)
@@ -66,7 +67,17 @@ if __name__ == "__main__":
     config = {"configurable": {"thread_id": "thread-1"}}
 
     for chunk in compiled_graph.stream(
-        ResearchAgentInputState(messages=[HumanMessage("who are the currently the top 3 players of al mountakhab?")]),
+        ResearchAgentInputState(
+            messages=[
+                HumanMessage(
+                    "who are the currently the top 3 players of al mountakhab?",
+                ),
+                AIMessage(
+                    "When you say “al mountakhab” which team do you mean? A few quick clarifying points so I can answer accurately:\n\n- Which country’s national team? (e.g., Tunisia, Morocco, Egypt, etc.)\n- Which sport? I’ll assume football (soccer) unless you tell me otherwise.\n- How should I measure “top 3 players”? Options: current form/coach’s first-choice XI, market value (Transfermarkt), recent goals/assists or impact, or fan/popular opinion. Pick one or say “your choice” and I’ll use the most common metric.\n\nYou can reply briefly (for example: “Morocco, football, by current form”)."
+                ),
+                HumanMessage("Morocco, men'sfootball, by current form"),
+            ]
+        ),
         config=config,  # type: ignore
         stream_mode="values",
     ):
