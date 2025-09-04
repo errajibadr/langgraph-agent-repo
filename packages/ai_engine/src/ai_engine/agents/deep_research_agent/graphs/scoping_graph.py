@@ -14,6 +14,7 @@ from ai_engine.agents.deep_research_agent.research_agent_states import (
 from ai_engine.models.custom_chat_model import CustomChatModel
 from ai_engine.utils.dates import get_today_date
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
@@ -33,7 +34,7 @@ def clarify_with_user(state: ResearchAgentState) -> Command[Literal["write_resea
 
 def write_research_brief(state: ResearchAgentState):
     """Write the research brief Node"""
-    model = CustomChatModel().with_structured_output(ResearchBrief)
+    model = CustomChatModel(max_tokens=3000).with_structured_output(ResearchBrief)
     response: ResearchBrief = model.invoke(
         [SystemMessage(content=transform_messages_into_research_topic_prompt.format(date=get_today_date()))]
         + state.messages,  # type: ignore
@@ -51,16 +52,22 @@ def get_scoping_graph():
     graph.add_edge(START, "clarify_with_user")
     graph.add_edge("write_research_brief", END)
 
-    compiled_graph = graph.compile()
+    checkpointer = MemorySaver()
+    compiled_graph = graph.compile(checkpointer=checkpointer)
     return compiled_graph
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     compiled_graph = get_scoping_graph()
     config = {"configurable": {"thread_id": "thread-1"}}
-    print(
-        compiled_graph.invoke(
-            ResearchAgentInputState(messages=[HumanMessage("What is the weather in Tokyo?")]),
-            config=config,  # type: ignore
-        )
-    )
+
+    for chunk in compiled_graph.stream(
+        ResearchAgentInputState(messages=[HumanMessage("who are the currently the top 3 players of al mountakhab?")]),
+        config=config,  # type: ignore
+        stream_mode="values",
+    ):
+        print(chunk)

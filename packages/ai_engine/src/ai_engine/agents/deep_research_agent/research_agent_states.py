@@ -23,7 +23,7 @@ class ResearchAgentState(BaseModel):
     """State for the research agent.
 
     - messages: The messages from the user and the response from the agent.
-    - research_bried: The research brief.
+    - research_brief: The research brief.
     - agents_conversation_canal: The conversation between the agents. *shared between agents*
     - raw_notes: The raw notes from the agents. *shared with research agent*
     - notes: The notes from the agents.
@@ -31,7 +31,7 @@ class ResearchAgentState(BaseModel):
     """
 
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
-    research_bried: str | None = None
+    research_brief: str | None = None
     agents_conversation_canal: Annotated[list[BaseMessage], add_messages]
     raw_notes: Annotated[list[BaseMessage], list_add] = Field(default_factory=list)
     notes: Annotated[list[BaseMessage], list_add] = Field(default_factory=list)
