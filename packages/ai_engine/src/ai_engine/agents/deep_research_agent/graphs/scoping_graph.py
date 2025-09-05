@@ -40,7 +40,7 @@ def write_research_brief(state: ResearchAgentState):
         + state.messages,  # type: ignore
     )
 
-    return {"research_brief": response.research_brief}
+    return {"research_brief": response.research_brief, "messages": [AIMessage(content=response.research_brief)]}
 
 
 def get_scoping_graph():

@@ -25,3 +25,8 @@ ai-engine = "ai_engine:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "tavily-python>=0.7.11",
+]
+

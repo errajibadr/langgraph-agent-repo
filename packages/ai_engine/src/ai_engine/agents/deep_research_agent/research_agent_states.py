@@ -4,8 +4,9 @@ This defines the state objects and structured schemas used for
 the research agent scoping workflow, including researcher state management and output schemas.
 """
 
+import operator
 from operator import add as list_add
-from typing import Annotated
+from typing import Annotated, Sequence, TypedDict
 
 from langgraph.graph.message import AnyMessage, BaseMessage, add_messages
 
@@ -32,8 +33,8 @@ class ResearchAgentState(BaseModel):
 
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     research_brief: str | None = None
-    agents_conversation_canal: Annotated[list[BaseMessage], add_messages]
-    raw_notes: Annotated[list[BaseMessage], list_add] = Field(default_factory=list)
+    agents_conversation_canal: Annotated[list[AnyMessage | BaseMessage], add_messages]
+    raw_notes: Annotated[list[str], list_add] = Field(default_factory=list)
     notes: Annotated[list[BaseMessage], list_add] = Field(default_factory=list)
     finale_report: str | None = None
 
@@ -43,6 +44,37 @@ class ResearchAgentOutputState(BaseModel):
     final_report: str | None = None
 
 
+# ===== STATE DEFINITIONS =====
+class ResearcherState(TypedDict):
+    """
+    State for the research agent containing message history and research metadata.
+
+    This state tracks the researcher's conversation, iteration count for limiting
+    tool calls, the research topic being investigated, compressed findings,
+    and raw research notes for detailed analysis.
+    """
+
+    researcher_messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
+    tool_call_iterations: int
+    research_topic: str
+    compressed_research: str
+    raw_notes: Annotated[list[str], operator.add]
+
+
+class ResearcherOutputState(TypedDict):
+    """
+    Output state for the research agent containing final research results.
+
+    This represents the final output of the research process with compressed
+    research findings and all raw notes from the research process.
+    """
+
+    compressed_research: str
+    raw_notes: Annotated[list[str], operator.add]
+    researcher_messages: Annotated[Sequence[BaseMessage], add_messages]
+
+
+# ===== STRUCTURED OUTPUT SCHEMAS =====
 class ClarifyWithUser(BaseModel):
     """State for the clarify with user node."""
 
@@ -59,3 +91,10 @@ class ResearchBrief(BaseModel):
     """State for the research brief node."""
 
     research_brief: str = Field(description="The research brief")
+
+
+class Summary(BaseModel):
+    """Schema for webpage content summarization."""
+
+    summary: str = Field(description="Concise summary of the webpage content")
+    key_excerpts: str = Field(description="Important quotes and excerpts from the content")

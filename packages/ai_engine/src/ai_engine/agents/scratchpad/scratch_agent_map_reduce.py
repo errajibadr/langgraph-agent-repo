@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    for chunk in compiled_joke_graph.stream(
+    for chunk in compiled_joke_graph.s(
         InputState(
             messages=[HumanMessage("i want to have fun about something related to dogs and loyalty?", name="hammy")]
         ),

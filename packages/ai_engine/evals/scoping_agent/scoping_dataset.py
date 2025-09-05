@@ -24,28 +24,29 @@ conversation_research_brief = [
 research_brief_criterias = ["morocco men's football team ", "by current form", "2024-2025 season stats"]
 
 
-load_dotenv()
+if __name__ == "__main__":
+    load_dotenv()
 
-client = Client()
+    client = Client()
 
-dataset_name = "deep_research_scoping_dataset"
+    dataset_name = "deep_research_scoping_dataset"
 
-if not client.has_dataset(dataset_name=dataset_name):
-    dataset = client.create_dataset(
-        dataset_name=dataset_name,
-        description="A dataset for the scoping agent",
-    )
+    if not client.has_dataset(dataset_name=dataset_name):
+        dataset = client.create_dataset(
+            dataset_name=dataset_name,
+            description="A dataset for the scoping agent",
+        )
 
-    client.create_examples(
-        dataset_id=dataset.id,
-        examples=[
-            {
-                "inputs": {"messages": conversation_with_clarification},
-                "outputs": {"criteria": cwc_criterias},
-            },
-            {
-                "inputs": {"messages": conversation_research_brief},
-                "outputs": {"criteria": research_brief_criterias},
-            },
-        ],
-    )
+        client.create_examples(
+            dataset_id=dataset.id,
+            examples=[
+                {
+                    "inputs": {"messages": conversation_with_clarification},
+                    "outputs": {"criteria": cwc_criterias},
+                },
+                {
+                    "inputs": {"messages": conversation_research_brief},
+                    "outputs": {"criteria": research_brief_criterias},
+                },
+            ],
+        )

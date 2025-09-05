@@ -4,7 +4,7 @@ from ai_engine.models.custom_chat_model import CustomChatModel
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from packages.ai_engine.evals.scoping_agent.laaj_prompts import (
+from packages.ai_engine.evals.scoping_agent.llms_as_judge_prompts import (
     AI_RESPONSE_CRITERION_PROMPT,
     BRIEF_CRITERIA_PROMPT,
     BRIEF_HALLUCINATION_PROMPT,
@@ -148,13 +148,6 @@ if __name__ == "__main__":
     from langsmith import Client
 
     langsmith_client = Client()
-
-    langsmith_client.evaluate(
-        target_func,
-        data="deep_research_scoping_dataset",
-        evaluators=[evaluate_criteria, evaluate_no_assumptions],
-        experiment_prefix="Deep Research Scoping",
-    )
 
     langsmith_client.evaluate(
         target_func,
