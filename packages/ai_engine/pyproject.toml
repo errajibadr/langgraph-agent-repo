@@ -16,6 +16,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=2.0.11",
     "langchain-google-vertexai>=2.0.28",
     "aiosqlite>=0.21.0",
+    "langchain-mcp-adapters>=0.1.9",
 ]
 
 [project.scripts]

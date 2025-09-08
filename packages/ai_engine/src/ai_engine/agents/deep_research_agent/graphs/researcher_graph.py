@@ -13,11 +13,10 @@ from ai_engine.agents.deep_research_agent.research_agent_states import Researche
 from ai_engine.models.custom_chat_model import CustomChatModel
 from ai_engine.tools.reflection_tool import think_tool
 from ai_engine.tools.research_tools import tavily_search
-from ai_engine.utils.dates import get_today_date
+from ai_engine.utils.helpers import get_today_date
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage, filter_messages
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
 # ===== CONFIGURATION =====
@@ -152,12 +151,14 @@ def get_researcher_graph() -> CompiledStateGraph:
 
 if __name__ == "__main__":
     research_brief = """
-    I want you to identify and rank the top 3 players in the Morocco men’s national football team (Al Mountakhab) by current form and last season performance, and produce a clear justification for the ranking. Use the instructions and defaults below unless I tell you otherwise. Required outputs: for each of the top 3 players provide (1) a short justification paragraph, (2) last completed club season summary (appearances, minutes, goals, assists, shots/90, goals/90, assists/90, key passes/90, xG, xA where available, successful dribbles/90, pass completion or progressive passes/90; for defenders: tackles/90, interceptions/90, clearances/90; for goalkeepers: saves, save%, clean sheets, goals prevented if available), (3) current form summary (last 10 club + country matches and last 6 months — match ratings where available, goals/assists/other key contributions per match, notes on minutes played and injuries), (4) a short note on competition level (league and continental competitions) and how that affects interpretation, and (5) direct source links for each key stat (prefer official/primary sources). Also provide a brief methodology section explaining how you combined “current form” and “last season stats” to produce the ranking, list of all data sources searched, and any caveats (injuries, recent transfers, small-sample noise).\n\nKey definitions and defaults (apply unless I specify otherwise):\n- \"Last season\": the most recently completed club season (default = 2024–25 season). If a player moved clubs mid-season, report combined totals and note the split by club.\n- \"Current form\": default = last 6 months and last 10 competitive matches across club and country (whichever gives more context). If you prefer a different window (e.g., last 5 matches or last 3 months), state it and justify.\n- Ranking method (default): produce a transparent composite ranking that weights current form and last season stats equally (50% current form, 50% last season). Show component scores (how each player scored on the two dimensions). If you believe a different weighting is more appropriate, say so and show the alternative ranking.\n\nMetrics to collect and normalize (adjust per position):\n- For attackers/midfielders: appearances, minutes, goals, assists, shots/90, goals/90, assists/90, key passes/90, xG, xA, successful dribbles/90, progressive carries/90 (if available), pass completion or progressive passes/90.\n- For defenders: appearances, minutes, tackles/90, interceptions/90, clearances/90, aerials won/90, passes out from back/progressive passes/90, clean sheets involvement.\n- For goalkeepers: appearances, minutes, saves, save%, clean sheets, goals prevented or post-shot xG if available.\n- For all: minutes per goal/assist, availability (injury absences), match ratings trends (WhoScored/SofaScore/FBref), and competition level (UEFA Champions League, top-5 league vs smaller leagues, CAF competitions).\n\nSource priorities (check these first and link specific pages):\n1) Official sources: Morocco FA (FRMF) match reports, player pages, club official sites, UEFA/CAF/league official stats pages.  \n2) Primary stat databases: Transfermarkt (appearances, minutes, transfers), FBref (per90 and advanced metrics), Opta/StatsBomb feeds where accessible, Understat for xG in supported leagues.  \n3) Match ratings & recent form: WhoScored, SofaScore, reputable press match reports (BBC, ESPN, L’Équipe, Marca).  \n4) For transfer/market context: Transfermarkt.  \n\nUnspecified aspects I did not assume and how you should treat them:\n- You did not specify the weighting between \"current form\" and \"last season\" — I defaulted to 50/50 but will adjust if you request.\n- You did not specify an exact time window for \"current form\" — I defaulted to last 6 months / last 10 matches; I will note this and can change it on request.\n- You did not require a position constraint; evaluate all Morocco senior squad players regardless of position.\n\nDeliverable format: rank list of top 3 (with composite score and component scores), per-player stat summary table, methodology, source links, and short caveats. Prioritize direct links to official club pages, FRMF, Transfermarkt and FBref pages for each player’s stats.
+    What is the difference between fucntion and tool in langchain?
     """
 
     researcher_agent = get_researcher_graph()
+    observation = researcher_agent.invoke({"researcher_messages": [HumanMessage(research_brief)]})
+    print(observation)
 
-    for chunk in researcher_agent.stream(
-        input={"researcher_messages": [HumanMessage(research_brief)]}, stream_mode="values"
-    ):
-        print(chunk)
+    # for chunk in researcher_agent.stream(
+    #     input={"researcher_messages": [HumanMessage(research_brief)]}, stream_mode="values"
+    # ):
+    #     print(chunk)

@@ -155,11 +155,24 @@ if __name__ == "__main__":
     class Summary(BaseModel):
         summary: str
 
+    def add_tool(x: int, y: int) -> int:
+        """Add two numbers"""
+        return x + y
+
+    def tool_arirthmetic(x: int, y: int) -> int:
+        """Multiply two numbers"""
+        return x * y
+
+    model = CustomChatModel().bind_tools([add_tool, tool_arirthmetic])
+
+    result = model.invoke([HumanMessage("Always use available tools.What is 2 + 2 then multiply by 3?")])
+    print(result)
+
     # result = CustomChatModel().with_structured_output(Summary).invoke([HumanMessage("What is the weather in Tokyo?")])
 
-    from langchain_google_vertexai.chat_models import ChatVertexAI
+    # from langchain_google_vertexai.chat_models import ChatVertexAI
 
-    result = ChatVertexAI(model_name="gemini-2.5-flash", location="europe-west9", project="sandbox-467809").invoke(
-        [HumanMessage("What is the weather in Tokyo?")]
-    )
-    print(result)
+    # result = ChatVertexAI(model_name="gemini-2.5-flash", location="europe-west9", project="sandbox-467809").invoke(
+    #     [HumanMessage("What is the weather in Tokyo?")]
+    # )
+    # print(result)
