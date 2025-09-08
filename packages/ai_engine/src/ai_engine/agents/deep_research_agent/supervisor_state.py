@@ -14,7 +14,7 @@ class SupervisorState(TypedDict):
     research_brief: str
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     raw_notes: Annotated[list[str], operator.add]
-    notes: Annotated[list[BaseMessage], add_messages]
+    notes: Annotated[list[str], operator.add]
     finale_report: str
     compressed_research: str
     ## Config params
@@ -25,7 +25,7 @@ class SupervisorOutputState(TypedDict):
     """Output state for the supervisor agent."""
 
     compressed_research: str
-    raw_notes: Annotated[list[str], operator.add]
+    notes: Annotated[list[str], operator.add]
     supervisor_messages: Annotated[Sequence[BaseMessage], add_messages]
 
 

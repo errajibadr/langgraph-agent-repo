@@ -145,7 +145,7 @@ def get_researcher_graph() -> CompiledStateGraph:
     agent_builder.add_edge("compress_research", END)
 
     # Compile the agent
-    researcher_agent = agent_builder.compile()
+    researcher_agent = agent_builder.compile(name="researcher_graph")
     return researcher_agent
 
 

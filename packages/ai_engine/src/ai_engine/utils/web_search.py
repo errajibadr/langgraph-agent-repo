@@ -57,7 +57,9 @@ def summarize_webpage_content(webpage_content: str) -> str:
     """
     try:
         # Set up structured output model for summarization
-        structured_model = summarization_model.with_structured_output(Summary)
+        structured_model = summarization_model.with_structured_output(
+            Summary, config={"run_name": "Summary Structured Output"}
+        )
 
         # Generate summary
         summary: Summary = structured_model.invoke(
@@ -65,7 +67,8 @@ def summarize_webpage_content(webpage_content: str) -> str:
                 HumanMessage(
                     content=summarize_webpage_prompt.format(webpage_content=webpage_content, date=get_today_date())
                 )
-            ]  # type: ignore
+            ],  # type: ignore
+            config={"metadata": {"name": "summarization_model"}, "run_name": "Summarize Webpage"},
         )
 
         # Format summary with clear structure

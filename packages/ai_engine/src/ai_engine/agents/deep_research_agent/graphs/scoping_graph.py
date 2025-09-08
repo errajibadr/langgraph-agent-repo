@@ -7,7 +7,6 @@ from ai_engine.agents.deep_research_agent.prompts.scoping_prompts import (
 from ai_engine.agents.deep_research_agent.research_agent_states import (
     ClarifyWithUser,
     ResearchAgentInputState,
-    ResearchAgentOutputState,
     ResearchAgentState,
     ResearchBrief,
 )
@@ -40,7 +39,10 @@ def write_research_brief(state: ResearchAgentState):
         + state.messages,  # type: ignore
     )
 
-    return {"research_brief": response.research_brief, "messages": [AIMessage(content=response.research_brief)]}
+    return {
+        "research_brief": response.research_brief,
+        "supervisor_messages": [HumanMessage(content=response.research_brief)],
+    }
 
 
 def get_scoping_graph():

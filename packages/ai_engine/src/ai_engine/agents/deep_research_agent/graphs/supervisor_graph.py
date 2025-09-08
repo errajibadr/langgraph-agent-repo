@@ -147,7 +147,7 @@ def get_supervisor_graph() -> CompiledStateGraph:
         .add_node("supervisor", supervisor)
         .add_node("supervisor_tools", supervisor_tools)
         .add_edge(START, "supervisor")
-    ).compile()
+    ).compile(name="supervisor_graph")
 
 
 async def main():

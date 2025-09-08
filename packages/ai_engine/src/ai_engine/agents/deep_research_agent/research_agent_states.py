@@ -33,9 +33,9 @@ class ResearchAgentState(BaseModel):
 
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     research_brief: str | None = None
-    agents_conversation_canal: Annotated[list[AnyMessage | BaseMessage], add_messages]
+    supervisor_messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     raw_notes: Annotated[list[str], list_add] = Field(default_factory=list)
-    notes: Annotated[list[BaseMessage], list_add] = Field(default_factory=list)
+    notes: Annotated[list[str], list_add] = Field(default_factory=list)
     finale_report: str | None = None
 
 
