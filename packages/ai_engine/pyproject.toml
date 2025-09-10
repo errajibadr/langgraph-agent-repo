@@ -17,6 +17,10 @@ dependencies = [
     "langchain-google-vertexai>=2.0.28",
     "aiosqlite>=0.21.0",
     "langchain-mcp-adapters>=0.1.9",
+    "langchain-community>=0.3.29", # Scraping website for RAG document_loaders.sitemap import SitemapLoader
+    "lxml>=6.0.1", # Scraping website for RAG
+    "bs4>=0.0.2", # Scraping website for RAG
+    "scikit-learn>=1.7.2", # Only used for Vector DB
 ]
 
 [project.scripts]
