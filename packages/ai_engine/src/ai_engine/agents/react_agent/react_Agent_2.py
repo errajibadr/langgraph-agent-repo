@@ -1,12 +1,11 @@
-import copy
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Type
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Type, TypeVar, Union
 
 from ai_engine.agents.scratchpad.scratch_agent import get_weather
 from ai_engine.models.custom_chat_model import CustomChatModel
 from ai_engine.tools.reflection_tool import think_tool
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_core.runnables.config import RunnableConfig
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -18,32 +17,23 @@ from langgraph.prebuilt.chat_agent_executor import (
     AgentStatePydantic,
     StateSchema,
     StateSchemaType,
+    StructuredResponse,
     StructuredResponseSchema,
 )
 from langgraph.types import Command, Interrupt, interrupt
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict
 
-# Default system prompt template
-DEFAULT_SYSTEM_PROMPT_TEMPLATE = """You are a helpful AI assistant.
-You have access to tools to help answer questions.
-If you don't have the answer for an ambiguous question, you can ask the user for clarification.
-
-
-When using tools:
-- Use the appropriate tool based on the user's question
-- Always provide clear explanations of your findings
-- If you need more information, ask follow-up questions
-
-User: {user}
-Current time: {current_time}
-"""
+# Type variables for generic state schemas
+StateT = TypeVar("StateT", bound=Union[AgentState, AgentStatePydantic, TypedDict, BaseModel])
+InputT = TypeVar("InputT", bound=Union[TypedDict, BaseModel])
+OutputT = TypeVar("OutputT", bound=Union[TypedDict, BaseModel])
 
 # Default system prompt template
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = """You are a helpful AI assistant.
 You have access to tools to help answer questions.
 If you don't have the answer for an ambiguous question, you can ask the user for clarification.
-If you don't have the answer for a question, you can ask the user for clarification.
+
 
 When using tools:
 - Use the appropriate tool based on the user's question
@@ -72,7 +62,7 @@ class InputWeatherAgentStatePydantic(BaseModel):
 
 
 class Summary(BaseModel):
-    summary: str = Field(description="The summary of the weather, if unknown, should be spicified")
+    summary: str = Field(description="The summary of the weather, if unknown, should be specified")
     temperature: float | None = Field(
         default=None, description="The temperature of the weather; if unknown, should be None"
     )
@@ -86,51 +76,69 @@ class OutputWeatherAgentStatePydantic(BaseModel):
 
 
 class PydanticReactAgent:
-    """React Agent class."""
+    """React Agent class with modern type hints following LangGraph patterns."""
 
     def __init__(
         self,
         name: str,
         model: CustomChatModel,
         tools: List[BaseTool | Callable],
-        state: Type[BaseModel] = AgentStatePydantic,
-        input_state: Type[BaseModel] | None = None,
-        output_state: Type[BaseModel] | None = None,
-        response_format: Optional[StructuredResponseSchema] = None,
+        *,
+        # State schemas with proper type hints
+        state_schema: Optional[StateSchemaType] = None,
+        input_schema: Optional[Type[InputT]] = None,
+        output_schema: Optional[Type[OutputT]] = None,
+        # Response format with modern typing
+        response_format: Optional[Union[StructuredResponseSchema, tuple[str, StructuredResponseSchema]]] = None,
         system_prompt_template: str = DEFAULT_SYSTEM_PROMPT_TEMPLATE,
     ):
         self.name = name
         self.model = model
         self.tools = tools
+
+        # Handle tools binding
         if self.tools:
             self.model = self.model.bind_tools(self.tools, parallel_tool_calls=True)
 
-        self.response_format = response_format or None
-
-        self.state = state
-        self.input_state = input_state
-        self.output_state = output_state or self.state
+        # Store schema types with proper typing
+        self.state_schema: StateSchemaType = state_schema or AgentStatePydantic
+        self.input_schema: Optional[Type[InputT]] = input_schema
+        self.output_schema: Optional[Type[OutputT]] = output_schema
+        self.response_format = response_format
         self.system_prompt_template = system_prompt_template
 
-    def call_model(self, state: BaseModel) -> BaseModel:
-        return self.state(
+    def call_model(self, state: StateT) -> StateT:
+        """Call the model with current state."""
+        return self.state_schema(
             messages=[
                 self.model.invoke(
                     input=[self.system_prompt_template, *state.messages],
                 )
             ],
             remaining_steps=state.remaining_steps - 1,
-        )  # type: ignore
+        )
 
-    def format_response(self, state: BaseModel) -> BaseModel:
-        model = self.model.with_structured_output(self.response_format)  # type: ignore
+    def format_response(self, state: StateT) -> OutputT:
+        """Format the response using structured output."""
+        if not self.response_format:
+            raise ValueError("response_format must be provided for format_response")
+
+        model = self.model.with_structured_output(self.response_format)
         summary = model.invoke(
             input=state.messages, model="openai/gpt-oss-120b", config={"run_name": "Structured Output"}
         )
 
-        return self.output_state(summary=summary, messages=[AIMessage(content=str(summary))])  # type: ignore
+        # Handle different output schema types
+        if self.output_schema:
+            return self.output_schema(summary=summary, messages=[AIMessage(content=str(summary))])
+        else:
+            # Fallback to default output structure
+            return type("OutputState", (), {"summary": summary, "messages": [AIMessage(content=str(summary))]})()
 
-    def post_llm_node_condition(self, state: AgentStatePydantic) -> Literal["tool_node", "format_response", "__end__"]:
+    def post_llm_node_condition(
+        self, state: Union[AgentState, AgentStatePydantic]
+    ) -> Literal["tool_node", "format_response", "__end__"]:
+        """Determine next node based on LLM response."""
         print("remaining steps", state.remaining_steps)
         if isinstance(state.messages[-1], AIMessage) and state.messages[-1].tool_calls:
             print("calling tool id", state.messages[-1].tool_calls[0].get("id"))
@@ -139,36 +147,50 @@ class PydanticReactAgent:
             return "format_response"
         return "__end__"
 
-    def _get_state_dict(self) -> Dict[str, Type[BaseModel]]:
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """Get state schema dictionary for StateGraph."""
         state_dict = {
-            "state_schema": self.state or AgentStatePydantic,
+            "state_schema": self.state_schema,
         }
-        if self.input_state:
-            state_dict["input_schema"] = self.input_state
-        if self.output_state:
-            state_dict["output_schema"] = self.output_state
+        if self.input_schema:
+            state_dict["input_schema"] = self.input_schema
+        if self.output_schema:
+            state_dict["output_schema"] = self.output_schema
 
         return state_dict
 
     def get_graph(self) -> CompiledStateGraph:
-        # print(f"{self.name} - self._get_state_dict()", self._get_state_dict())
+        """Build and compile the agent graph."""
         graph = StateGraph(**self._get_state_dict())
+
         graph.add_node("call_model", self.call_model)
         graph.add_node("tool_node", ToolNode(tools=self.tools, tags=[f"{self.name}_tool_node"]))
-        graph.add_node("format_response", self.format_response)
+
+        if self.response_format:
+            graph.add_node("format_response", self.format_response)
 
         graph.add_edge(START, "call_model")
+
+        # Set up conditional edges
+        conditional_edges = {"format_response": "format_response", "tool_node": "tool_node", "__end__": END}
+        if not self.response_format:
+            conditional_edges.pop("format_response")
+
         graph.add_conditional_edges(
             "call_model",
             self.post_llm_node_condition,
-            {"format_response": "format_response", "tool_node": "tool_node", "__end__": END},
+            conditional_edges,
         )
 
         graph.add_edge("tool_node", "call_model")
-        graph.add_edge("format_response", END)
+
+        if self.response_format:
+            graph.add_edge("format_response", END)
+
         return graph.compile(name=self.name, checkpointer=MemorySaver())
 
 
+# Example usage with modern patterns
 if __name__ == "__main__":
     from dotenv import load_dotenv
 
@@ -194,22 +216,24 @@ if __name__ == "__main__":
 
     model = CustomChatModel(provider="groq")
 
+    # Example with structured response format
     response_format = Summary
-    system_prompt_template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
+
+    # Create agent with modern schema typing
     weather_agent = PydanticReactAgent(
         name="weather_agent",
         model=model,
         tools=[get_weather, escalate_to_user, get_location],
-        state=WeatherAgentStatePydantic,
-        input_state=InputWeatherAgentStatePydantic,
+        state_schema=WeatherAgentStatePydantic,
+        input_schema=InputWeatherAgentStatePydantic,
+        output_schema=OutputWeatherAgentStatePydantic,
         response_format=response_format,
-        output_state=OutputWeatherAgentStatePydantic,
-        system_prompt_template=system_prompt_template,
+        system_prompt_template=DEFAULT_SYSTEM_PROMPT_TEMPLATE,
     )
+
     weather_graph = weather_agent.get_graph()
 
-    @tool
-    def call_weather_agent(state: Annotated[AgentStatePydantic, InjectedState]):
+    def call_weather_agent(state: Annotated[WeatherAgentStatePydantic, InjectedState]):
         """Call the weather agent"""
         response = weather_graph.invoke(
             InputWeatherAgentStatePydantic(
@@ -220,15 +244,17 @@ if __name__ == "__main__":
         print(response.keys())
         return response.get("summary")
 
-    agent = PydanticReactAgent(
+    # Supervisor agent with modern typing
+    supervisor_agent = PydanticReactAgent(
         name="supervisor_agent",
         model=model,
         tools=[think_tool, call_weather_agent],
-        state=AgentStatePydantic,
-        input_state=AgentStatePydantic,
-        system_prompt_template=system_prompt_template,
+        state_schema=AgentStatePydantic,
+        input_schema=AgentStatePydantic,
+        system_prompt_template=DEFAULT_SYSTEM_PROMPT_TEMPLATE,
     )
-    graph = agent.get_graph()
+
+    graph = supervisor_agent.get_graph()
 
     first_message = AgentStatePydantic(messages=[HumanMessage("What's the weather in Paris?")])
     last_message = None
