@@ -18,6 +18,7 @@ class GlobalStatePydantic(BaseModel):
 
 
 def get_weather(city: str) -> str:
+    """Get the weather in a city"""
     weather_conditions = ["sunny", "cloudy", "rainy", "stormy", "snowy"]
     return f"The weather in {city} is {random.choice(weather_conditions)}."
 

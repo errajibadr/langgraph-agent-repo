@@ -2,9 +2,10 @@
 
 from typing import Optional
 
-from core.types import ProviderType
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from core.types import ProviderType
 
 
 class BaseProviderSettings(BaseSettings):
@@ -51,6 +52,16 @@ class LLMaaSDevSettings(BaseProviderSettings):
     model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
 
 
+class GroqSettings(BaseProviderSettings):
+    """Settings for LLMaaS Development provider."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="GROQ_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
+
+    model_name: Optional[str] = Field(default="llama-3.3-70b-versatile", description="Name of the model to use")
+
+
 class CustomProviderSettings(BaseProviderSettings):
     """Settings for Custom provider."""
 
@@ -76,7 +87,9 @@ class MultiProviderSettings(BaseSettings):
             ProviderType.LLMAAS: LLMaaSSettings,
             ProviderType.LLMAAS_DEV: LLMaaSDevSettings,
             ProviderType.CUSTOM: CustomProviderSettings,
+            ProviderType.GROQ: GroqSettings,
         }
-
+        if self.provider not in provider_map:
+            raise ValueError(f"Invalid provider: {self.provider}, valid providers are: {list(provider_map.keys())}")
         settings_class = provider_map[self.provider]
         return settings_class()

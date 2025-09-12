@@ -9,3 +9,4 @@ class ProviderType(str, Enum):
     LLMAAS = "llmaas"
     LLMAAS_DEV = "llmaas_dev"
     CUSTOM = "custom"
+    GROQ = "groq"

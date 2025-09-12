@@ -93,6 +93,7 @@ class CustomChatModel(ChatOpenAI):
             ProviderType.LLMAAS: "LLMAAS_",
             ProviderType.LLMAAS_DEV: "LLMAAS_DEV_",
             ProviderType.CUSTOM: "",
+            ProviderType.GROQ: "GROQ_",
         }[provider]
 
         if not config.get("api_key"):

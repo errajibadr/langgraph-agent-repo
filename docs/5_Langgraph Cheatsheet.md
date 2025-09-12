@@ -111,7 +111,45 @@ graph.stream(Command(resume=user_input), config=config)
 ```
 
 
+
 ### Command : 
+
+How to inject tool call id
+
+def create_handoff_tool(*, agent_name: str, description: str | None = None):
+    name = f"transfer_to_{agent_name}"
+    description = description or f"Transfer to {agent_name}"
+
+    @tool(name, description=description)
+    def handoff_tool(
+        state: Annotated[MessagesState, InjectedState], 
+        tool_call_id: Annotated[str, InjectedToolCallId],
+    ) -> Command:
+        tool_message = {
+            "role": "tool",
+            "content": f"Successfully transferred to {agent_name}",
+            "name": name,
+            "tool_call_id": tool_call_id,
+        }
+        return Command(  
+            goto=agent_name,  
+            update={"messages": state["messages"] + [tool_message]},  
+            graph=Command.PARENT,  
+        )
+    return handoff_tool
+
+@tool
+def update_user_name(
+    new_name: str,
+    tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
+    """Update user-name in short-term memory."""
+    return Command(update={
+        "user_name": new_name,
+        "messages": [
+            ToolMessage(f"Updated user name to {new_name}", tool_call_id=tool_call_id)
+        ]
+    })
 
 ### Parallelism : 
 
@@ -275,3 +313,44 @@ def node(state: State, runtime: Runtime[ContextSchema]):
     return state
 ```
 
+## Runtime
+
+### init :
+
+```python
+class ContextSchema(BaseModel):
+    model: str
+    system_prompt: str
+
+graph = StateGraph(StateSchema, context_init=ContextSchema)
+```
+
+### USing runtime context
+
+```python
+from langgraph.runtime import Runtime
+
+def node_a(state: State, runtime: Runtime[ContextSchema]):
+    llm = get_llm(runtime.context.llm_provider)
+    ...
+
+from langgraph.runtime import get_runtime
+
+def tool(i: int) -> int:
+    rt= get_runtime(ContextSchema)
+    ${rt.context.context_var}...
+```
+
+###  Dynamic model choice w/ runtime 
+```python
+def select_model(state: AgentState, runtime: Runtime[CustomContext]) -> BaseChatModel:
+    if runtime.context.provider == "anthropic":
+        model = anthropic_model
+    elif runtime.context.provider == "openai":
+        model = openai_model
+    else:
+        raise ValueError(f"Unsupported provider: {runtime.context.provider}")
+
+    # With dynamic model selection, you must bind tools explicitly
+    return model.bind_tools([weather])
+```
