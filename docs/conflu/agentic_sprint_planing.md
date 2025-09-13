@@ -42,6 +42,7 @@
 - Epic : Domino - evaluate what will be different ways of consuming our agents - (Platform vs local) should we create a new project for each agent - keep same project for all agents ? ...
 
 ### • Opus : Domain-Specific Agents
+- Epic : support - Clarification agent
 - Epic : technical - Kubernetes troubleshooting agent
 - Epic : technical - VM troubleshooting agent
 - Epic : technical - Network troubleshooting agent
