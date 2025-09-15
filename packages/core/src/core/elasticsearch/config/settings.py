@@ -11,18 +11,18 @@ class ElasticSearchSettings(BaseSettings):
     es_host: str
     es_port: Optional[int] = 9200
     es_api_key: Optional[str] = None
-    es_username: Optional[str] = None  
+    es_username: Optional[str] = None
     es_password: Optional[str] = None
     es_default_index: Optional[str] = None
     es_timeout: int = 30
     es_verify_certs: bool = True
     es_max_retries: int = 3
     es_retry_on_timeout: bool = True
-    
+
     class Config:
         env_prefix = "ELASTICSEARCH_"
         env_file = ".env"
-    
+
     def to_elasticsearch_config(self) -> ElasticSearchConfig:
         return ElasticSearchConfig(
             id=self.es_id,
@@ -36,8 +36,5 @@ class ElasticSearchSettings(BaseSettings):
             timeout=self.es_timeout,
             verify_certs=self.es_verify_certs,
             max_retries=self.es_max_retries,
-            retry_on_timeout=self.es_retry_on_timeout
-        )
-            max_retries=self.es_max_retries,
-            retry_on_timeout=self.es_retry_on_timeout
+            retry_on_timeout=self.es_retry_on_timeout,
         )
