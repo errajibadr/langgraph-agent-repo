@@ -1,14 +1,40 @@
 from typing import Any, Dict, List, Optional, TypeVar
 
-from .adapters_async import AsyncElasticsearchAdapter
-from .dtos import Pagination, SearchResult
-from .mapping import HitMapper, build_result
-from .query_builder import QueryBuilder
+from core.adapters.elasticsearch.adapters_async import AsyncElasticsearchAdapter
+from core.adapters.elasticsearch.dtos import Pagination, SearchResult
+from core.adapters.elasticsearch.mapping import HitMapper, build_result
+from core.adapters.elasticsearch.query_builder import QueryBuilder
+from core.repositories.base import BaseRepository
 
 T = TypeVar("T")
 
 
-class GenericRepositoryAsync:
+class GenericRepositoryAsync(BaseRepository):
+    """Generic async repository for ElasticSearch indices.
+
+    Example:
+        ```python
+        settings = ElasticsearchSettings()
+        adapter = AsyncElasticsearchAdapter(**settings.client_kwargs())
+        repo = GenericRepositoryAsync(adapter, index=settings.es_default_index or "datalab-logs-audit-k8s")
+
+        # 1) Raw body
+        res = await repo.search_raw_body({"query": {"match_all": {}}, "size": 5})
+
+        # 2) Raw kwargs
+        res = await repo.search_raw(query={"term": {"iks_audit.verb": "GET"}}, size=10, track_total_hits=True)
+
+        # 3) Text on all fields
+        res = await repo.search_term_all("name", pagination=Pagination(page=1, size=10))
+
+        # 4) Text in specific fields
+        res = await repo.search_term_in_fields("action", ["event.action", "iks_audit.requestURI"])
+
+        # 5) Exists filter
+        res = await repo.filter_exists(["iks_audit.objectRef.namespace"])
+        ```
+    """
+
     def __init__(
         self,
         adapter: AsyncElasticsearchAdapter,
@@ -26,6 +52,12 @@ class GenericRepositoryAsync:
         include_raw: bool = False,
         **kwargs,
     ) -> SearchResult[T]:
+        """Execute a raw ElasticSearch body.
+
+        Args:
+            body: Complete ES body dict.
+            include_raw: If True, includes raw ES response in result.
+        """
         resp = await self.adapter.search(index=self.index, body=body, **kwargs)
         return build_result(resp, mapper=self.mapper, include_raw=include_raw)
 
@@ -43,6 +75,10 @@ class GenericRepositoryAsync:
         include_raw: bool = False,
         **kwargs,
     ) -> SearchResult[T]:
+        """Build and execute a body from common raw kwargs.
+
+        Typical kwargs mirror ES body parts: query, size, from_, sort, aggs, post_filter, _source.
+        """
         body: Dict[str, Any] = {}
         if query is not None:
             body["query"] = query
@@ -78,6 +114,10 @@ class GenericRepositoryAsync:
         include_raw: bool = False,
         **kwargs,
     ) -> SearchResult[T]:
+        """Search text across all fields using simple_query_string.
+
+        Combine with include_filters/exclude_filters/exists_fields for filtering.
+        """
         q_text = QueryBuilder.text_query_any_field(text)
         filters = QueryBuilder.build_filters(include_filters, exclude_filters, exists_fields)
         query = {
@@ -106,6 +146,10 @@ class GenericRepositoryAsync:
         include_raw: bool = False,
         **kwargs,
     ) -> SearchResult[T]:
+        """Search text in a list of fields using multi_match.
+
+        fields: e.g., ["event.action", "iks_audit.requestURI"]
+        """
         q_text = QueryBuilder.text_query_in_fields(text, fields)
         filters = QueryBuilder.build_filters(include_filters, exclude_filters, exists_fields)
         query = {
@@ -127,10 +171,12 @@ class GenericRepositoryAsync:
         include_raw: bool = False,
         **kwargs,
     ) -> SearchResult[T]:
+        """Filter documents where all provided fields exist."""
         filters = QueryBuilder.build_filters(exists_fields=fields)
         query = {"bool": {"filter": filters["filter"]}}
         body = QueryBuilder.base_body(query, pagination=pagination)
         resp = await self.adapter.search(index=self.index, body=body, **kwargs)
         return build_result(resp, mapper=self.mapper, include_raw=include_raw)
-        return build_result(resp, mapper=self.mapper, include_raw=include_raw)
 
+    def close(self) -> None:
+        pass

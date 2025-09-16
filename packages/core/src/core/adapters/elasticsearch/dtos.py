@@ -18,5 +18,5 @@ class Pagination:
 class SearchResult(Generic[T]):
     items: List[T]
     total: int
+    aggregations: Optional[Dict[str, Any]] = None
     raw: Optional[Dict[str, Any]] = None
-

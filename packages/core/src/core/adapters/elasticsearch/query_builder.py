@@ -63,6 +63,3 @@ class QueryBuilder:
         if track_total_hits is not None:
             body["track_total_hits"] = track_total_hits
         return body
-            body["track_total_hits"] = track_total_hits
-        return body
-

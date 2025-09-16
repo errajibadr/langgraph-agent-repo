@@ -10,7 +10,7 @@ from .providers import (
 
 __all__ = [
     "BaseProviderSettings",
-    "CustomProviderSettings", 
+    "CustomProviderSettings",
     "LLMaaSDevSettings",
     "LLMaaSSettings",
     "MultiProviderSettings",
