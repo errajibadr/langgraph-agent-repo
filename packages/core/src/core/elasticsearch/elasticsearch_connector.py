@@ -25,19 +25,28 @@ class ElasticsearchConnector:
         if body is not None:
             return await self.client.search(index=index, body=body, **kwargs)
 
-        request_body = {"query": {"match_all": {}}}  # Default match_all
+        request_body = {}
 
-        # Update with provided parameters
-        updates = [
-            ("query", query),
-            ("size", size),
-            ("from", from_),
-            ("sort", sort),
-            ("aggs", aggs),
-            ("_source", _source),
-        ]
+        if query is not None:
+            request_body["query"] = query
 
-        updates = {key: value for key, value in updates if value is not None}
+        if size is not None:
+            request_body["size"] = size
+
+        if from_ is not None:
+            request_body["from"] = from_
+
+        if sort is not None:
+            request_body["sort"] = sort
+
+        if aggs is not None:
+            request_body["aggs"] = aggs
+
+        if _source is not None:
+            request_body["_source"] = _source
+
+        if "query" not in request_body:
+            request_body["query"] = {"match_all": {}}
 
         return await self.client.search(index=index, body=request_body, **kwargs)
 
