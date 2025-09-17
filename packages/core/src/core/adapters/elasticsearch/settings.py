@@ -1,10 +1,14 @@
 from typing import Any, Dict, Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ElasticsearchSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="ELASTICSEARCH_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
+
     es_host: str
     es_id: str
     es_api_key: str
@@ -21,10 +25,6 @@ class ElasticsearchSettings(BaseSettings):
     es_headers: Optional[Dict[str, str]] = None
 
     es_extra: Dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        env_prefix = "ELASTICSEARCH_"
-        env_file = ".env"
 
     def client_kwargs(self) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = {
