@@ -72,24 +72,29 @@ class CustomProviderSettings(BaseProviderSettings):
     model_name: Optional[str] = Field(default="gpt-4.1-mini", description="Name of the model to use")
 
 
-class MultiProviderSettings(BaseSettings):
-    """Multi-provider settings with automatic provider selection."""
+class ProviderFactory:
+    """Pure static factory for creating provider settings."""
 
-    provider: ProviderType = Field(default=ProviderType.CUSTOM, description="The LLM provider to use")
+    _provider_map = {
+        ProviderType.LLMAAS: LLMaaSSettings,
+        ProviderType.LLMAAS_DEV: LLMaaSDevSettings,
+        ProviderType.CUSTOM: CustomProviderSettings,
+        ProviderType.GROQ: GroqSettings,
+    }
 
-    model_config = SettingsConfigDict(
-        env_prefix="LLM_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
-    )
-
-    def get_provider_settings(self) -> BaseProviderSettings:
+    @staticmethod
+    def get_provider_settings(provider: ProviderType | None = None) -> BaseProviderSettings:
         """Get the appropriate provider settings based on the selected provider."""
-        provider_map = {
-            ProviderType.LLMAAS: LLMaaSSettings,
-            ProviderType.LLMAAS_DEV: LLMaaSDevSettings,
-            ProviderType.CUSTOM: CustomProviderSettings,
-            ProviderType.GROQ: GroqSettings,
-        }
-        if self.provider not in provider_map:
-            raise ValueError(f"Invalid provider: {self.provider}, valid providers are: {list(provider_map.keys())}")
-        settings_class = provider_map[self.provider]
+        import os
+
+        if provider is None:
+            # Read from environment with fallback to CUSTOM
+            provider_str = os.getenv("LLM_PROVIDER", ProviderType.CUSTOM.value)
+            provider = ProviderType(provider_str)
+
+        if provider not in ProviderFactory._provider_map:
+            raise ValueError(
+                f"Invalid provider: {provider}, valid providers are: {list(ProviderFactory._provider_map.keys())}"
+            )
+        settings_class = ProviderFactory._provider_map[provider]
         return settings_class()

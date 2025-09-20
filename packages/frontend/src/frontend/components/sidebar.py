@@ -4,11 +4,12 @@ import os
 from typing import Optional, Tuple
 
 import streamlit as st
+from core.models.providers import ProviderFactory
 from core.types import ProviderType
-from core.utils import get_env_values, get_provider_configs
 
-from ..services.api import fetch_models_from_api
-from ..services.model import auto_connect_model
+from frontend.services.api import fetch_models_from_api
+from frontend.services.model import auto_connect_model
+
 from .configuration import render_llm_configuration
 from .provider import render_model_selection, render_provider_selector
 
@@ -20,13 +21,15 @@ def render_sidebar() -> Tuple[ProviderType, str, str, str, str, float, Optional[
 
         # Provider selection (always visible)
         selected_provider, selected_provider_name = render_provider_selector()
-        provider_configs = get_provider_configs()
-        provider_config = provider_configs[selected_provider]
 
-        # Get environment values
-        env_api_key, env_base_url, env_model_name, env_temperature, env_top_p, env_max_tokens = get_env_values(
-            provider_config, selected_provider
-        )
+        # Get provider settings directly from factory
+        provider_settings = ProviderFactory.get_provider_settings(selected_provider)
+        env_api_key = provider_settings.api_key or ""
+        env_base_url = provider_settings.base_url or ""
+        env_model_name = provider_settings.model_name or ""
+        env_temperature = provider_settings.temperature or 0.7
+        env_top_p = provider_settings.top_p
+        env_max_tokens = provider_settings.max_tokens or 1000
 
         # Auto-fetch models when provider changes and credentials are available
         should_auto_fetch = (
@@ -49,16 +52,16 @@ def render_sidebar() -> Tuple[ProviderType, str, str, str, str, float, Optional[
         with st.expander(f"🔧 {selected_provider_name} Provider", expanded=True):
             # Configuration inputs
             api_key = st.text_input(
-                f"API Key ({provider_config.get('api_key_env', 'API_KEY')})",
+                "API Key",
                 value=env_api_key,
                 type="password",
-                help=f"Set via environment variable {provider_config.get('api_key_env', 'API_KEY')}",
+                help="API key for the LLM provider",
             )
 
             base_url = st.text_input(
-                f"Base URL ({provider_config.get('base_url_env', 'BASE_URL')})",
-                value=env_base_url or provider_config.get("default_base_url", ""),
-                help=f"Set via environment variable {provider_config.get('base_url_env', 'BASE_URL')}",
+                "Base URL",
+                value=env_base_url,
+                help="Base URL for the LLM provider API",
             )
 
             # Model fetching controls
@@ -78,12 +81,12 @@ def render_sidebar() -> Tuple[ProviderType, str, str, str, str, float, Optional[
                     st.rerun()
 
             # Model selection with auto-connect
-            selected_model = render_model_selection(selected_provider, provider_config, env_model_name)
+            selected_model = render_model_selection(selected_provider, {}, env_model_name)
 
         # LLM Configuration Section
-        has_top_p_env = bool(os.getenv(provider_config.get("top_p_env", "TOP_P")))
+        has_top_p_env = bool(os.getenv("TOP_P"))
         temperature, top_p, max_tokens = render_llm_configuration(
-            env_temperature, env_top_p, env_max_tokens, has_top_p_env
+            env_temperature, env_top_p or 0.9, env_max_tokens, has_top_p_env
         )
 
         # Auto-connect when model is selected or LLM parameters change

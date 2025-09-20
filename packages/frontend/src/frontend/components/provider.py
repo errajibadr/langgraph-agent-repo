@@ -10,6 +10,7 @@ from core.types import ProviderType
 def render_provider_selector() -> Tuple[ProviderType, str]:
     """Render provider selection dropdown."""
     provider_options = {
+        "Groq": ProviderType.GROQ,
         "Custom": ProviderType.CUSTOM,
         "LLMaaS": ProviderType.LLMAAS,
         "LLMaaS Dev": ProviderType.LLMAAS_DEV,

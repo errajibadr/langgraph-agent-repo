@@ -31,7 +31,8 @@ f: frontend
 
 dev-frontend: ## Run frontend in development mode with auto-reload
 	cd packages/frontend && streamlit run src/frontend/app.py --server.runOnSave true
-dev/f: dev-frontend
+f/dev: dev-frontend
+f/d: dev-frontend
 
 # Testing targets
 test: ## Run all tests

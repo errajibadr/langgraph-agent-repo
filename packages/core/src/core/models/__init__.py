@@ -1,11 +1,11 @@
 """Core model definitions."""
 
-from .providers import (
+from core.models.providers import (
     BaseProviderSettings,
     CustomProviderSettings,
     LLMaaSDevSettings,
     LLMaaSSettings,
-    MultiProviderSettings,
+    ProviderFactory,
 )
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
     "CustomProviderSettings",
     "LLMaaSDevSettings",
     "LLMaaSSettings",
-    "MultiProviderSettings",
+    "ProviderFactory",
 ]

@@ -1,6 +1,6 @@
 from typing import Any, Dict, Union
 
-from core.models import MultiProviderSettings
+from core.models.providers import ProviderFactory
 from core.types import ProviderType
 from langchain_openai import ChatOpenAI
 
@@ -44,11 +44,8 @@ class CustomChatModel(ChatOpenAI):
         if provider is not None and (isinstance(provider, str)):
             provider = ProviderType(provider.lower())
 
-        # Load multi-provider settings
-        multi_settings = MultiProviderSettings(provider=provider)
-
         # Get provider-specific settings
-        provider_settings = multi_settings.get_provider_settings()
+        provider_settings = ProviderFactory.get_provider_settings(provider)
 
         # Prepare configuration dictionary
         config = {}
@@ -78,10 +75,10 @@ class CustomChatModel(ChatOpenAI):
                 config[key] = value
 
         # Validate required parameters
-        self._validate_required_config(config, multi_settings.provider)
+        self._validate_required_config(config, provider)
 
         print(
-            f"CustomChatModel initialized for provider '{multi_settings.provider.value}' with config: {self._safe_config_for_logging(config)}"
+            f"CustomChatModel initialized for provider '{provider.value}' with config: {self._safe_config_for_logging(config)}"
         )
         super().__init__(*args, **config)
 
