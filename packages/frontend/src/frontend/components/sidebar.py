@@ -26,7 +26,7 @@ def render_sidebar() -> Tuple[ProviderType, str, str, str, str, float, Optional[
         provider_settings = ProviderFactory.get_provider_settings(selected_provider)
         env_api_key = provider_settings.api_key or ""
         env_base_url = provider_settings.base_url or ""
-        env_model_name = provider_settings.model_name or ""
+        env_model_name = provider_settings.model or ""
         env_temperature = provider_settings.temperature or 0.7
         env_top_p = provider_settings.top_p
         env_max_tokens = provider_settings.max_tokens or 1000

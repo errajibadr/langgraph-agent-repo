@@ -30,4 +30,4 @@ def build_result(
     items = [map_fn(h) for h in hits]
     total = parse_total(resp, fallback_count=len(items))
     aggs = resp.get("aggregations") or resp.get("aggs")
-    return SearchResult(items=items, total=total, aggregations=aggs, raw=(resp if include_raw else None))
+    return SearchResult(items=items, total=total, aggregations=aggs, raw=(resp if include_raw else None))  # type: ignore

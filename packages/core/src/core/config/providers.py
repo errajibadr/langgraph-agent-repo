@@ -16,7 +16,7 @@ class BaseProviderSettings(BaseSettings):
     # Provider settings
     api_key: Optional[str] = Field(default=None, description="API key for the LLM provider")
     base_url: Optional[str] = Field(default=None, description="Base URL for the LLM provider API")
-    model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+    model: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
 
     # LLM generation settings
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature (0.0 to 2.0)")
@@ -25,7 +25,7 @@ class BaseProviderSettings(BaseSettings):
     )
     max_tokens: Optional[int] = Field(default=1000, ge=1, le=4096, description="Maximum tokens in response")
 
-    @field_validator("api_key", "base_url", "model_name", mode="before")
+    @field_validator("api_key", "base_url", "model", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
         """Convert empty strings to None for proper validation."""
@@ -39,7 +39,7 @@ class LLMaaSSettings(BaseProviderSettings):
         env_prefix="LLMAAS_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+    model: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
 
 
 class LLMaaSDevSettings(BaseProviderSettings):
@@ -49,7 +49,7 @@ class LLMaaSDevSettings(BaseProviderSettings):
         env_prefix="LLMAAS_DEV_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model_name: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+    model: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
 
 
 class GroqSettings(BaseProviderSettings):
@@ -59,7 +59,7 @@ class GroqSettings(BaseProviderSettings):
         env_prefix="GROQ_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model_name: Optional[str] = Field(default="llama-3.3-70b-versatile", description="Name of the model to use")
+    model: Optional[str] = Field(default="llama-3.3-70b-versatile", description="Name of the model to use")
 
 
 class CustomProviderSettings(BaseProviderSettings):

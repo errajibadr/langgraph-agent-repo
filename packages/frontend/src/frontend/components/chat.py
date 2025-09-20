@@ -4,7 +4,6 @@ import streamlit as st
 
 from frontend.types import CreativityLevel
 
-from .chat_settings import render_chat_settings
 from .configuration import render_example_configurations
 
 
