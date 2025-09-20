@@ -4,7 +4,7 @@ import os
 from typing import Optional, Tuple
 
 import streamlit as st
-from core.models.providers import ProviderFactory
+from core.config import ProviderFactory
 from core.types import ProviderType
 
 from frontend.services.api import fetch_models_from_api

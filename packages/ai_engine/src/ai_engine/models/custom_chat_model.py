@@ -1,6 +1,6 @@
 from typing import Any, Dict, Union
 
-from core.models.providers import ProviderFactory
+from core.config import ProviderFactory
 from core.types import ProviderType
 from langchain_openai import ChatOpenAI
 
