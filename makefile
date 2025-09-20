@@ -87,3 +87,8 @@ lup: docker/langgraph-up
 docker/langgraph-down:
 	@docker compose -f infra/docker/langgraph.docker-compose.yaml --env-file .env -p langgraph-selfhosted down
 ldown: docker/langgraph-down
+
+
+langgraph/dev:
+	uv run langgraph dev --config ./packages/ai_engine/langgraph.json
+l/d: langgraph/dev

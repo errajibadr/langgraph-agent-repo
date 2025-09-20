@@ -2,9 +2,8 @@
   "python_version": "3.12",
   "dependencies": [".", "../core"],
   "graphs": {
-    "chat": "ai_engine.agents.agent_1:graph",
-    "scratch": "ai_engine.agents.scratch_agent:graph",
-    "joker": "ai_engine.agents.scratch_agent_map_reduce:compiled_joke_graph"
+    "scratch": "ai_engine.agents.scratchpad.scratch_agent:graph",
+    "joker": "ai_engine.agents.scratchpad.scratch_agent_map_reduce:compiled_joke_graph"
   },
   "image_distro": "wolfi"
 }
