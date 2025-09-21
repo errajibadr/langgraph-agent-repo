@@ -13,11 +13,11 @@ from langgraph.graph.message import AnyMessage, BaseMessage, add_messages
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 
-conn = sqlite3.connect("langgraph.db")
+conn = sqlite3.connect("data/langgraph.db")
 
 
 def get_saver():
-    conn = sqlite3.connect("langgraph.db", check_same_thread=False)
+    conn = sqlite3.connect("/datalanggraph.db", check_same_thread=False)
     return SqliteSaver(conn)
 
 

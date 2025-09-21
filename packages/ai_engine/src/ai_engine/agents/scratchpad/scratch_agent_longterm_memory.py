@@ -15,11 +15,11 @@ from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 from pydantic import BaseModel, Field
 
-conn = sqlite3.connect("langgraph.db")
+conn = sqlite3.connect("data/anggraph.db")
 
 
 def get_saver():
-    conn = sqlite3.connect("langgraph.db", check_same_thread=False)
+    conn = sqlite3.connect("data/langgraph.db", check_same_thread=False)
     return SqliteSaver(conn)
 
 

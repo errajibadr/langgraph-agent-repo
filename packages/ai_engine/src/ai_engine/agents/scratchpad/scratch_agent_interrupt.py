@@ -14,11 +14,11 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 from pydantic import BaseModel
 
-conn = sqlite3.connect("langgraph.db")
+conn = sqlite3.connect("data/langgraph.db")
 
 
 def get_saver():
-    conn = sqlite3.connect("langgraph.db", check_same_thread=False)
+    conn = sqlite3.connect("data/langgraph.db", check_same_thread=False)
     return SqliteSaver(conn)
 
 

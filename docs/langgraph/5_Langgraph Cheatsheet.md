@@ -83,7 +83,7 @@ saver = InMemorySaver()
 
 ```
 from sqlite3
-conn = sqlite3.connect("langgraph.db")
+conn = sqlite3.connect("data/langgraph.db")
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 saver = SqliteSaver(conn)
