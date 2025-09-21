@@ -75,16 +75,8 @@ class ResearcherOutputState(TypedDict):
 
 
 # ===== STRUCTURED OUTPUT SCHEMAS =====
-class ClarifyWithUser(BaseModel):
-    """State for the clarify with user node."""
-
-    need_clarification: bool = Field(
-        default=False, description="Whether you need more clarification from the user to start the research"
-    )
-    question: str = Field(description="The question to ask the user to clarify the scope of the research")
-    verification: str = Field(
-        description="Verify message that we will start research after the user has provided the necessary information.",
-    )
+# Import ClarifyWithUser from base to avoid duplication
+from ..base.states import ClarifyWithUser
 
 
 class ResearchBrief(BaseModel):

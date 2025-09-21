@@ -2,6 +2,7 @@ from datetime import datetime
 from operator import add
 from typing import Annotated, Callable, Literal, Protocol, Type, TypedDict, TypeVar
 
+from ai_engine.agents.base.states.common_states import ClarificationArtifact
 from ai_engine.models.custom_chat_model import create_chat_model
 from langchain_core.messages import AIMessage, AIMessageChunk, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph, add_messages
@@ -108,6 +109,7 @@ class ClarifyState(TypedDict):
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     current_round: Annotated[int, add]
     max_rounds: int
+    artifacts: list[ClarificationArtifact]
 
 
 class UserContext(BaseModel):
@@ -140,7 +142,7 @@ def get_user_context(user_id: str) -> UserContext:
 
 
 def get_clarify_graph(
-    state_schema: type[StateT],
+    state_schema: type[StateT] = ClarifyState,
     output_schema: type[OutputT] | None = None,
     *,
     name: str | None = None,
@@ -195,11 +197,8 @@ def get_clarify_graph(
 
     graph.add_node("clarify", model_node)
 
-    def enrich_query_node(state: state_schema) -> state_schema:
-        print(f"Enrich query node: {state}")
-        return state
-
-    graph.add_node("enrich_query", enrich_query_node)
+    if enrich_query_enabled:
+        graph.add_node("enrich_query", lambda state: {})
 
     graph.add_edge(START, "clarify")
     graph.add_edge("clarify", END)

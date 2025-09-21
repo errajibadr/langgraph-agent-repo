@@ -1,0 +1,71 @@
+"""Example usage of the Clarify Agent.
+
+This example demonstrates how to use the clarify agent to disambiguate
+user queries in an AI-OPS context.
+"""
+
+from operator import add
+from typing import Annotated, TypedDict
+
+from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
+from langgraph.graph import add_messages
+
+from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
+from ai_engine.agents.clarify_agent.states import ClarificationArtifact
+
+
+class InputState(TypedDict):
+    """Simple input state for the clarify agent."""
+
+    messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
+    current_round: int
+    max_rounds: int
+    artifacts: Annotated[list[ClarificationArtifact], add]
+
+
+def main():
+    """Example usage of the clarify agent."""
+    # Create the clarify graph
+    clarify_graph = get_clarify_graph(
+        name="ClarifyAgent",
+        enrich_query_enabled=False,
+    )
+
+    # Configuration with thread ID for conversation tracking
+    config = {"configurable": {"thread_id": "example-thread-1"}}
+
+    # Example user query that needs clarification
+    initial_state = InputState(
+        messages=[HumanMessage("Show me the recent issues with my app")],
+        current_round=0,
+        max_rounds=3,
+        artifacts=[],
+    )
+
+    # Stream the conversation
+    print("=== Clarify Agent Example ===")
+
+    for chunk in clarify_graph.stream(
+        initial_state,
+        config=config,  # type: ignore
+        stream_mode="values",
+    ):
+        if isinstance(chunk, dict):
+            if "messages" in chunk and chunk["messages"]:
+                last_message = chunk["messages"][-1]
+                last_message.pretty_print()
+
+            # Display artifacts if any
+            if "artifacts" in chunk and chunk["artifacts"]:
+                print("\n📋 Clarification Options:")
+                for i, artifact in enumerate(chunk["artifacts"], 1):
+                    print(f"  {i}. {artifact.title}")
+                    print(f"     {artifact.description}")
+                    print()
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    main()
