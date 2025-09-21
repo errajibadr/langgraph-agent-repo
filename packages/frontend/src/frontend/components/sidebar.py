@@ -11,6 +11,7 @@ from frontend.services.api import fetch_models_from_api
 from frontend.services.model import auto_connect_model
 
 from .configuration import render_llm_configuration
+from .graph_selector import render_graph_selector
 from .provider import render_model_selection, render_provider_selector
 
 
@@ -18,6 +19,11 @@ def render_sidebar() -> Tuple[ProviderType, str, str, str, str, float, Optional[
     """Render the sidebar with provider configuration."""
     with st.sidebar:
         st.header("⚙️ Configuration")
+
+        # Graph/Agent selection (always visible at top)
+        render_graph_selector()
+
+        st.markdown("---")  # Visual separator
 
         # Provider selection (always visible)
         selected_provider, selected_provider_name = render_provider_selector()
