@@ -1,14 +1,11 @@
 """Common types and utilities for React Agents."""
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, Callable, Type, TypeVar, Union
 
-from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
-from langgraph.graph.message import add_messages
-from langgraph.managed import RemainingSteps
-from langgraph.prebuilt.chat_agent_executor import AgentState, AgentStatePydantic, StructuredResponseSchema
+from langgraph.prebuilt.chat_agent_executor import AgentState, AgentStatePydantic
 from pydantic import BaseModel
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import TypedDict
 
 # Type variables for generic state schemas with proper bounds
 StateT = TypeVar("StateT", bound=Union[AgentState, AgentStatePydantic, TypedDict, BaseModel])

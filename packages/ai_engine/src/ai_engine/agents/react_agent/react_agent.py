@@ -1,9 +1,6 @@
 import copy
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Type
 
-from ai_engine.agents.scratchpad.scratch_agent import get_weather
-from ai_engine.models.custom_chat_model import CustomChatModel
-from ai_engine.tools.reflection_tool import think_tool
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool, tool
@@ -23,6 +20,10 @@ from langgraph.prebuilt.chat_agent_executor import (
 from langgraph.types import Command, Interrupt, interrupt
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict
+
+from ai_engine.agents.scratchpad.scratch_agent import get_weather
+from ai_engine.models.custom_chat_model import CustomChatModel
+from ai_engine.tools.reflection_tool import think_tool
 
 # Default system prompt template
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = """You are a helpful AI assistant.
