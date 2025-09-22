@@ -35,6 +35,7 @@ def auto_connect_model(
 
         new_model = CustomChatModel(**kwargs)
 
+        model_message = "Model" if "current_model" not in st.session_state else "🔄 Model Updated"
         # Check if this is a different model
         model_changed = (
             "current_model" not in st.session_state
@@ -50,7 +51,7 @@ def auto_connect_model(
         # Add system message if model changed
         if model_changed and "messages" in st.session_state:
             top_p_display = "Disabled" if top_p is None else f"{top_p}"
-            system_msg = f"🔄 **Model Updated** - {provider_name}: `{model}` (T={temperature}, P={top_p_display}, Max={max_tokens})"
+            system_msg = f" **{model_message}** - {provider_name}: `{model}` (T={temperature}, P={top_p_display}, Max={max_tokens})"
             st.session_state.messages.append({"role": "assistant", "content": system_msg})
 
         return True

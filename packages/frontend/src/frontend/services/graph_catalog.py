@@ -8,29 +8,28 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
 from ai_engine.agents.clarify_agent import get_clarify_graph
-from ai_engine.agents.clarify_agent.states import ClarifyState
+from langgraph.checkpoint.memory import InMemorySaver
 
 
 @dataclass
 class GraphInfo:
     """Information about a graph in the catalog."""
-    
+
     id: str
     name: str
     description: str
     category: str
     factory_function: Callable[..., Any]
-    default_state_schema: type
     default_config: Dict[str, Any]
     icon: str = "🤖"
 
 
 class GraphCatalog:
     """Catalog of available graphs for the frontend."""
-    
+
     def __init__(self):
         self._graphs = self._initialize_catalog()
-    
+
     def _initialize_catalog(self) -> Dict[str, GraphInfo]:
         """Initialize the catalog with available graphs."""
         return {
@@ -40,44 +39,41 @@ class GraphCatalog:
                 description="AI-OPS clarification agent that helps disambiguate operational queries before routing to specialist agents",
                 category="Clarification",
                 factory_function=get_clarify_graph,
-                default_state_schema=ClarifyState,
                 default_config={
                     "name": "ClarifyAgent",
                     "enrich_query_enabled": False,
+                    "checkpointer": InMemorySaver(),
                 },
-                icon="❓"
+                icon="❓",
             ),
             # Future graphs can be added here:
             # "research_agent": GraphInfo(...),
             # "react_agent": GraphInfo(...),
         }
-    
+
     def get_all_graphs(self) -> List[GraphInfo]:
         """Get all available graphs."""
         return list(self._graphs.values())
-    
+
     def get_graph_by_id(self, graph_id: str) -> GraphInfo | None:
         """Get a graph by its ID."""
         return self._graphs.get(graph_id)
-    
+
     def get_graphs_by_category(self, category: str) -> List[GraphInfo]:
         """Get graphs filtered by category."""
         return [graph for graph in self._graphs.values() if graph.category == category]
-    
+
     def create_graph_instance(self, graph_id: str, **kwargs) -> Any:
         """Create an instance of a graph by ID."""
         graph_info = self.get_graph_by_id(graph_id)
         if not graph_info:
             raise ValueError(f"Graph '{graph_id}' not found in catalog")
-        
+
         # Merge default config with provided kwargs
         config = {**graph_info.default_config, **kwargs}
-        
+
         # Create the graph instance
-        return graph_info.factory_function(
-            state_schema=graph_info.default_state_schema,
-            **config
-        )
+        return graph_info.factory_function(**config)
 
 
 # Global catalog instance

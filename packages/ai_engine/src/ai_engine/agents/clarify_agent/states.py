@@ -11,7 +11,7 @@ from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph import add_messages
 
 # Import common states from base
-from ..base.states import ClarificationArtifact, ClarifyWithUser, UserContext
+from ai_engine.agents.base.states import ClarificationArtifact, ClarifyWithUser, UserContext
 
 # Re-export common states for convenience
 __all__ = ["ClarifyState", "ClarificationArtifact", "ClarifyWithUser", "UserContext"]
@@ -28,3 +28,10 @@ class ClarifyState(TypedDict):
     current_round: Annotated[int, add]
     max_rounds: int
     artifacts: Annotated[list[ClarificationArtifact], add]
+
+
+class ClarifyContext(TypedDict):
+    """Context for the clarify agent workflow."""
+
+    user_id: str
+    clarify_system_prompt: str

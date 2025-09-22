@@ -62,9 +62,10 @@ def _initialize_selected_graph(graph_id: str):
                 st.session_state.current_graph = graph_instance
                 st.session_state.current_graph_id = graph_id
                 st.session_state.current_graph_info = graph_info
-                st.session_state.current_state_schema = graph_info.default_state_schema
 
-                st.sidebar.success(f"✅ {graph_info.name} ready!")
+                if graph_info:
+                    st.session_state.current_state_schema = graph_info.default_state_schema
+                    st.sidebar.success(f"✅ {graph_info.name} ready!")
 
         except Exception as e:
             st.sidebar.error(f"❌ Failed to initialize {graph_id}: {str(e)}")

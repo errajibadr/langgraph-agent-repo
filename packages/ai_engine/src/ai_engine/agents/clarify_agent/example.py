@@ -11,7 +11,7 @@ from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
 from langgraph.graph import add_messages
 
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
-from ai_engine.agents.clarify_agent.states import ClarificationArtifact
+from ai_engine.agents.clarify_agent.states import ClarificationArtifact, ClarifyContext
 
 
 class InputState(TypedDict):
@@ -33,7 +33,7 @@ def main():
 
     # Configuration with thread ID for conversation tracking
     config = {"configurable": {"thread_id": "example-thread-1"}}
-
+    context = ClarifyContext(user_id="example-user-1", clarify_system_prompt="You are a helpful assistant.")
     # Example user query that needs clarification
     initial_state = InputState(
         messages=[HumanMessage("Show me the recent issues with my app")],
@@ -48,6 +48,7 @@ def main():
     for chunk in clarify_graph.stream(
         initial_state,
         config=config,  # type: ignore
+        context=context,  # type: ignore
         stream_mode="values",
     ):
         if isinstance(chunk, dict):
