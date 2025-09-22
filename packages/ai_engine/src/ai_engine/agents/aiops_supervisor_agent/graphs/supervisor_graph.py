@@ -28,8 +28,6 @@ supervisor_tools_list = {
     think_tool.name: think_tool,
 }
 
-supervisor_model = create_chat_model().bind_tools(list(supervisor_tools_list.values()))
-
 
 # System constants
 # Maximum number of tool call iterations for individual researcher agents
@@ -166,6 +164,7 @@ def get_supervisor_graph(
         This node uses an LLM to determine if clarification is needed
         and generates appropriate questions or verification messages.
         """
+        supervisor_model = create_chat_model().bind_tools(list(supervisor_tools_list.values()))
         context = runtime.context or {}
         runtime_prompt = context.get("supervisor_system_prompt", "") if runtime.context else ""
         user_id = context.get("user_id", None)

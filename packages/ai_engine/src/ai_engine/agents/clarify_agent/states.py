@@ -12,6 +12,7 @@ from langgraph.graph import add_messages
 
 # Import common states from base
 from ai_engine.agents.base.states import ClarificationArtifact, ClarifyWithUser, UserContext
+from ai_engine.agents.base.states.context import BaseContext
 
 # Re-export common states for convenience
 __all__ = ["ClarifyState", "ClarificationArtifact", "ClarifyWithUser", "UserContext"]
@@ -30,7 +31,7 @@ class ClarifyState(TypedDict):
     artifacts: list[ClarificationArtifact]
 
 
-class ClarifyContext(UserContext):
+class ClarifyContext(BaseContext):
     """Context for the clarify agent workflow."""
 
     clarify_system_prompt: str
