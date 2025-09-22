@@ -7,7 +7,7 @@ clarification workflows that help disambiguate user queries.
 from datetime import datetime
 from typing import Literal, Type, cast
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.pregel.main import asyncio
@@ -20,6 +20,7 @@ from ai_engine.agents.aiops_supervisor_agent.tools.agent_tools import call_inspe
 from ai_engine.agents.base.utils import get_user_context
 from ai_engine.models.custom_chat_model import create_chat_model
 from ai_engine.tools.reflection_tool import think_tool
+from ai_engine.utils.streaming_parser import create_console_parser
 
 supervisor_tools_list = {
     call_inspector_agent.name: call_inspector_agent,
@@ -199,23 +200,32 @@ def get_supervisor_graph(
 
 
 async def main():
+    """Demonstrate streaming parser with supervisor graph."""
     graph = get_supervisor_graph(name="supervisor_graph")
     config = {"configurable": {"thread_id": "thread-1"}}
+
+    # Create streaming parser with console output
+    parser = create_console_parser()
+
+    print("🚀 Starting Supervisor Agent with Streaming Parser")
+    print("=" * 60)
+
     async for mode, chunk in graph.astream(
         {"messages": [HumanMessage(content="What's going on with my App Langgraph Platform? it lags")]},  # type: ignore
         config=config,  # type: ignore
         context=SupervisorContext(user_id="h88214"),  # type: ignore
         stream_mode=["messages", "values"],
     ):
-        # if mode == "values":
-        #     print(chunk.get("messages", [])[-1].pretty_print())
         if mode == "messages":
             chunk_messages, config = chunk
-            if chunk_messages.content:
-                print(chunk_messages.content)
-            if chunk_messages.tool_calls:
-                for tool_call in chunk_messages.tool_calls:
-                    print(f"tool_call: {tool_call}")
+            # Process the chunk through our streaming parser if it's a BaseMessage
+            if isinstance(chunk_messages, BaseMessage):
+                parser.process_chunk(chunk_messages)
+
+    print("\n" + "=" * 60)
+    print("🏁 Streaming Complete!")
+    print(f"Final state: {parser.get_current_state()}")
+    print(f"Final tool calls: {parser.get_final_tool_calls()}")
 
 
 if __name__ == "__main__":
