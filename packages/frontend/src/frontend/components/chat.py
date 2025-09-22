@@ -65,23 +65,45 @@ def _render_chat_area():
     """Render the chat messages and input area."""
     # Display chat history with inline artifact handling
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        # Handle different message types for natural chat flow
+        if message["role"] in ["user", "assistant"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-            # Handle artifacts inline with message
-            if "artifacts" in message and message["artifacts"]:
-                selected_artifact_id = render_artifacts(
-                    message["artifacts"], key_prefix=f"msg_{message.get('message_id', 'unknown')}"
-                )
+                # Handle artifacts inline with message
+                if "artifacts" in message and message["artifacts"]:
+                    selected_artifact_id = render_artifacts(
+                        message["artifacts"], key_prefix=f"msg_{message.get('message_id', 'unknown')}"
+                    )
 
-                if selected_artifact_id:
-                    # Process artifact selection as a new user interaction
-                    selected_artifact = next((a for a in message["artifacts"] if a.id == selected_artifact_id), None)
-                    if selected_artifact:
-                        artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
-                        _process_interaction(artifact_content)
-                        st.rerun()
-                        return
+                    if selected_artifact_id:
+                        # Process artifact selection as a new user interaction
+                        selected_artifact = next(
+                            (a for a in message["artifacts"] if a.id == selected_artifact_id), None
+                        )
+                        if selected_artifact:
+                            artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
+                            _process_interaction(artifact_content)
+                            st.rerun()
+                            return
+
+        elif message["role"] == "tool_call":
+            # Display tool call as assistant message
+            with st.chat_message("assistant"):
+                st.markdown(message["content"])
+                if message.get("status") == "executing":
+                    with st.spinner(f"Executing {message.get('tool_name', 'tool')}..."):
+                        st.empty()
+
+        elif message["role"] == "tool_result":
+            # Display tool result as assistant message
+            with st.chat_message("assistant"):
+                st.markdown(message["content"])
+
+                # Add expandable section for full result if available
+                if message.get("full_result") and len(str(message["full_result"])) > 200:
+                    with st.expander("View full result", expanded=False):
+                        st.text(str(message["full_result"]))
 
     # Handle user text input
     if prompt := st.chat_input("What would you like to ask?"):
@@ -125,17 +147,15 @@ def _stream_graph_response(content: str):
         is_supervisor = graph_id == "supervisor_agent"
 
         if is_supervisor:
-            # Use new async streaming for supervisor agent
-            st.markdown("🚀 **Starting Advanced Streaming Mode**")
-            st.markdown("---")
-
+            # Use new async streaming for supervisor agent with chat flow integration
             result = run_async_streaming(st.session_state.current_graph, input_state, config, context)
 
             response_content = result["response"]
             response_artifacts = result["artifacts"]
 
-            st.markdown("---")
-            st.success(f"✅ **Completed** - {result['completed_tools']} tools executed")
+            # The streaming handler already added all messages to session state
+            # No need to display anything here as it's handled in the chat flow
+            return
 
         else:
             # Use traditional streaming for other agents
