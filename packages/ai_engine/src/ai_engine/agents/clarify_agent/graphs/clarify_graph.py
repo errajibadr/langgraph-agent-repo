@@ -47,7 +47,7 @@ def get_clarify_graph(
         Compiled state graph for clarification workflow
     """
 
-    def model_node(
+    async def model_node(
         state: ClarifyState, runtime: Runtime[ClarifyContext]
     ) -> Command[Literal["__end__", "enrich_query"]]:
         """Main clarification node that processes user queries.
@@ -75,7 +75,7 @@ def get_clarify_graph(
         model = create_chat_model().with_structured_output(ClarifyWithUser)
 
         # Get clarification response
-        clarify_response: ClarifyWithUser = model.invoke(input=[system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
+        clarify_response: ClarifyWithUser = await model.ainvoke(input=[system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
 
         # Determine next step
         goto: Literal["__end__", "enrich_query"]
@@ -87,7 +87,7 @@ def get_clarify_graph(
         return Command(
             goto=goto,
             update={
-                "current_round": state.get("current_round", 0) + 1,
+                "current_round": +1,
                 "messages": [
                     AIMessage(
                         content=clarify_response.question

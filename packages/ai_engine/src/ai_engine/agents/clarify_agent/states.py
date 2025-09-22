@@ -27,11 +27,10 @@ class ClarifyState(TypedDict):
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
     current_round: Annotated[int, add]
     max_rounds: int
-    artifacts: Annotated[list[ClarificationArtifact], add]
+    artifacts: list[ClarificationArtifact]
 
 
-class ClarifyContext(TypedDict):
+class ClarifyContext(UserContext):
     """Context for the clarify agent workflow."""
 
-    user_id: str
     clarify_system_prompt: str
