@@ -1,6 +1,6 @@
 """Context utility functions for AI agents."""
 
-from ..states.common_states import UserContext
+from ai_engine.agents.base.states.context import UserContext
 
 
 def get_user_context(user_id: str) -> UserContext:

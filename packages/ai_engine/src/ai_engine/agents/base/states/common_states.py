@@ -4,7 +4,15 @@ This module contains reusable state classes and schemas that can be shared
 across different agents to avoid duplication and ensure consistency.
 """
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
+
+
+class ArtifactType(str, Enum):
+    """Type of the artifact."""
+
+    USER_CHOICE = "user_choice"
 
 
 class ClarificationArtifact(BaseModel):
@@ -15,6 +23,7 @@ class ClarificationArtifact(BaseModel):
     """
 
     id: str = Field(description="Unique identifier for the artifact")
+    type: ArtifactType = Field(description="Type of the artifact")
     title: str = Field(description="Display title shown to the user")
     description: str = Field(description="Brief description of what this option does")
 
@@ -39,28 +48,3 @@ class ClarifyWithUser(BaseModel):
         max_length=4,
         description="Clarification artifacts - concrete options the user can select (max 4)",
     )
-
-
-class UserContext(BaseModel):
-    """User context information for personalized agent responses.
-
-    Contains user-specific information that agents can use to provide
-    more relevant and personalized responses.
-    """
-
-    user_name: str = Field(description="The name of the user")
-    user_id: str = Field(description="The ID of the user")
-    user_teams: list[str] = Field(description="The teams the user is a member of")
-    user_apps: list[str] = Field(description="The apps the user has access to")
-    user_environments: list[str] = Field(description="The environments the user has access to")
-    current_incidents_alerts: str = Field(description="The current incidents and alerts for the user's apps")
-
-    def __str__(self) -> str:
-        """Return a formatted string representation of the user context."""
-        return (
-            f"- User: {self.user_name} (ID: {self.user_id})\n"
-            f"- Teams: {', '.join(self.user_teams)}\n"
-            f"- Managed Apps: {', '.join(self.user_apps)}\n"
-            f"- Accessible Environments: {', '.join(self.user_environments)}\n"
-            f"- Current Incidents/Alerts: {self.current_incidents_alerts}"
-        )

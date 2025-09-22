@@ -9,9 +9,9 @@ from operator import add as list_add
 from typing import Annotated, Sequence, TypedDict
 
 from langgraph.graph.message import AnyMessage, BaseMessage, add_messages
-
-# from langgraph.graph.state import BaseModel
 from pydantic import BaseModel, Field
+
+from ..base.states import ClarifyWithUser  # type: ignore
 
 
 class ResearchAgentInputState(BaseModel):
@@ -75,8 +75,6 @@ class ResearcherOutputState(TypedDict):
 
 
 # ===== STRUCTURED OUTPUT SCHEMAS =====
-# Import ClarifyWithUser from base to avoid duplication
-from ..base.states import ClarifyWithUser
 
 
 class ResearchBrief(BaseModel):
