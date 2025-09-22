@@ -107,6 +107,8 @@ class StreamingGraphParser:
         on_tool_call_complete: Optional[Callable[[int, ToolCallState], None]] = None,
         on_stream_complete: Optional[Callable[[StreamingState], None]] = None,
         on_iteration_start: Optional[Callable[[int], None]] = None,
+        enable_tool_streaming: bool = True,
+        enable_content_streaming: bool = True,
     ):
         """Initialize the streaming parser.
 
@@ -117,6 +119,8 @@ class StreamingGraphParser:
             on_tool_call_complete: Callback when tool call completes (index, state)
             on_stream_complete: Callback when streaming is complete (final_state)
             on_iteration_start: Callback when new iteration starts (iteration_number)
+            enable_tool_streaming: Whether to process tool call streaming events
+            enable_content_streaming: Whether to process content streaming events
         """
         self.state = StreamingState()
         self.on_content_update = on_content_update
@@ -125,6 +129,10 @@ class StreamingGraphParser:
         self.on_tool_call_complete = on_tool_call_complete
         self.on_stream_complete = on_stream_complete
         self.on_iteration_start = on_iteration_start
+
+        # Streaming control flags
+        self.enable_tool_streaming = enable_tool_streaming
+        self.enable_content_streaming = enable_content_streaming
 
         # Internal tracking for tool call batches
         self._global_tool_counter = 0
@@ -135,6 +143,32 @@ class StreamingGraphParser:
         self.state = StreamingState()
         self._global_tool_counter = 0
         self._seen_tool_ids.clear()
+
+    def enable_tool_streaming_mode(self):
+        """Enable tool call streaming events."""
+        self.enable_tool_streaming = True
+
+    def disable_tool_streaming_mode(self):
+        """Disable tool call streaming events."""
+        self.enable_tool_streaming = False
+
+    def enable_content_streaming_mode(self):
+        """Enable content streaming events."""
+        self.enable_content_streaming = True
+
+    def disable_content_streaming_mode(self):
+        """Disable content streaming events."""
+        self.enable_content_streaming = False
+
+    def set_streaming_modes(self, tool_streaming: bool = True, content_streaming: bool = True):
+        """Set both streaming modes at once.
+
+        Args:
+            tool_streaming: Whether to enable tool call streaming
+            content_streaming: Whether to enable content streaming
+        """
+        self.enable_tool_streaming = tool_streaming
+        self.enable_content_streaming = content_streaming
 
     def _detect_new_tool_call_batch(self, current_tool_ids: set) -> bool:
         """Detect if we have a new batch of tool calls (new iteration).
@@ -214,14 +248,15 @@ class StreamingGraphParser:
         # Update tracking set
         self._seen_tool_ids.update(current_tool_ids)
 
-        # Handle content updates
-        content = getattr(chunk_message, "content", "")
-        if content and isinstance(content, str) and content != self.state.content:
-            self.state.content = content
-            if self.on_content_update:
-                self.on_content_update(self.state.content)
+        # Handle content updates (if enabled)
+        if self.enable_content_streaming:
+            content = getattr(chunk_message, "content", "")
+            if content and isinstance(content, str) and content != self.state.content:
+                self.state.content = content
+                if self.on_content_update:
+                    self.on_content_update(self.state.content)
 
-        # Handle initial tool calls (complete tool call info)
+        # Handle initial tool calls (complete tool call info) - always track internally
         if hasattr(chunk_message, "tool_calls") and chunk_message.tool_calls:
             for idx, tool_call in enumerate(chunk_message.tool_calls):
                 if idx not in self.state.tool_calls:
@@ -233,10 +268,11 @@ class StreamingGraphParser:
                     )
                     self.state.tool_calls[idx] = tool_state
 
-                    if self.on_tool_call_start:
+                    # Only trigger callback if tool streaming is enabled
+                    if self.enable_tool_streaming and self.on_tool_call_start:
                         self.on_tool_call_start(idx, tool_call.get("name") or "", tool_call.get("id") or "")
 
-        # Handle tool call chunks (progressive argument building)
+        # Handle tool call chunks (progressive argument building) - always track internally
         tool_call_chunks = getattr(chunk_message, "tool_call_chunks", None)
         if tool_call_chunks:
             for chunk in tool_call_chunks:
@@ -252,7 +288,8 @@ class StreamingGraphParser:
                     )
                     self.state.tool_calls[idx] = tool_state
 
-                    if self.on_tool_call_start and chunk.get("name"):
+                    # Only trigger callback if tool streaming is enabled
+                    if self.enable_tool_streaming and self.on_tool_call_start and chunk.get("name"):
                         self.on_tool_call_start(idx, chunk.get("name", ""), chunk.get("id", ""))
                 else:
                     tool_state = self.state.tool_calls[idx]
@@ -271,14 +308,15 @@ class StreamingGraphParser:
                     was_complete = tool_state.status == ToolCallStatus.COMPLETE
                     tool_state.try_parse_args()
 
-                    # Trigger callbacks
-                    if self.on_tool_call_update:
-                        self.on_tool_call_update(idx, tool_state)
+                    # Trigger callbacks only if tool streaming is enabled
+                    if self.enable_tool_streaming:
+                        if self.on_tool_call_update:
+                            self.on_tool_call_update(idx, tool_state)
 
-                    # If tool call just completed, trigger completion callback
-                    if not was_complete and tool_state.status == ToolCallStatus.COMPLETE:
-                        if self.on_tool_call_complete:
-                            self.on_tool_call_complete(idx, tool_state)
+                        # If tool call just completed, trigger completion callback
+                        if not was_complete and tool_state.status == ToolCallStatus.COMPLETE:
+                            if self.on_tool_call_complete:
+                                self.on_tool_call_complete(idx, tool_state)
 
         return self.state
 
@@ -304,7 +342,9 @@ class StreamingGraphParser:
 # Convenience functions for common use cases
 
 
-def create_console_parser() -> StreamingGraphParser:
+def create_console_parser(
+    enable_tool_streaming: bool = True, enable_content_streaming: bool = True
+) -> StreamingGraphParser:
     """Create a parser that logs to console."""
 
     def on_content_update(content: str):
@@ -334,6 +374,8 @@ def create_console_parser() -> StreamingGraphParser:
         on_tool_call_update=on_tool_call_update,
         on_tool_call_complete=on_tool_call_complete,
         on_iteration_start=on_iteration_start,
+        enable_tool_streaming=enable_tool_streaming,
+        enable_content_streaming=enable_content_streaming,
     )
 
 
@@ -342,6 +384,8 @@ def create_ui_parser(
     tool_start_callback: Optional[Callable[[int, str, str], None]] = None,
     tool_update_callback: Optional[Callable[[int, ToolCallState], None]] = None,
     tool_complete_callback: Optional[Callable[[int, ToolCallState], None]] = None,
+    enable_tool_streaming: bool = True,
+    enable_content_streaming: bool = True,
 ) -> StreamingGraphParser:
     """Create a parser configured for UI integration."""
     return StreamingGraphParser(
@@ -349,4 +393,6 @@ def create_ui_parser(
         on_tool_call_start=tool_start_callback,
         on_tool_call_update=tool_update_callback,
         on_tool_call_complete=tool_complete_callback,
+        enable_tool_streaming=enable_tool_streaming,
+        enable_content_streaming=enable_content_streaming,
     )

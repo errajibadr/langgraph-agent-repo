@@ -9,8 +9,8 @@ import asyncio
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.agents.aiops_supervisor_agent.states import SupervisorContext
 from ai_engine.utils.streaming_parser import StreamingGraphParser, create_console_parser
-from langchain_core.messages import BaseMessage, HumanMessage
-
+from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
+ ToolMessage
 
 async def demonstrate_streaming_parsing():
     """Demonstrate the streaming parser with a supervisor graph."""
@@ -22,7 +22,7 @@ async def demonstrate_streaming_parsing():
     config = {"configurable": {"thread_id": "demo-thread"}}
 
     # Create streaming parser with console output
-    parser = create_console_parser()
+    parser = create_console_parser(enable_tool_streaming=False, enable_content_streaming=True)
 
     print("\n📝 Query: 'What's going on with my App Langgraph Platform? it lags'")
     print("-" * 60)
@@ -119,7 +119,10 @@ if __name__ == "__main__":
         await demonstrate_streaming_parsing()
 
         # Run the custom parser demonstration
-        await demonstrate_custom_parser()
+        # await demonstrate_custom_parser()
+
+        # # Run the streaming control demonstration
+        # await demonstrate_streaming_control()
 
         print("\n🎉 All demonstrations completed!")
 
