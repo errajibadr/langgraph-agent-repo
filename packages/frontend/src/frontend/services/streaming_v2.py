@@ -41,7 +41,7 @@ class ToolCallInfo:
 
 
 class AsyncStreamingHandler:
-    """Handler for async chunk-based streaming with chat flow integration."""
+    """Handler for async chunk-based streaming with in-place tool updates."""
 
     def __init__(self):
         """Initialize the streaming handler."""
@@ -51,6 +51,12 @@ class AsyncStreamingHandler:
 
         # Streaming messages (temporary during streaming)
         self.streaming_messages: List[Dict[str, Any]] = []
+
+        # Track tool message indices for in-place updates
+        self.tool_message_indices: Dict[str, int] = {}
+
+        # Track all tool executions for summary
+        self.all_tool_executions: List[Dict[str, Any]] = []
 
         # UI containers for real-time streaming display
         self.streaming_container = None
@@ -71,20 +77,17 @@ class AsyncStreamingHandler:
                     with st.chat_message("assistant"):
                         st.markdown(message["content"])
 
-                elif message["role"] == "tool_call":
+                elif message["role"] == "tool_execution":
                     with st.chat_message("assistant"):
                         st.markdown(message["content"])
+
+                        # Show execution status
                         if message.get("status") == "executing":
-                            st.info(f"⚙️ Executing {message.get('tool_name', 'tool')}...")
-
-                elif message["role"] == "tool_result":
-                    with st.chat_message("assistant"):
-                        st.markdown(message["content"])
-
-                        # Add expandable section for full result if available
-                        if message.get("full_result") and len(str(message["full_result"])) > 200:
-                            with st.expander("View full result", expanded=False):
-                                st.text(str(message["full_result"]))
+                            st.info("⚙️ Executing...")
+                        elif message.get("status") == "completed":
+                            # Show result preview if available
+                            if message.get("result_preview"):
+                                st.success(f"Result: {message['result_preview']}")
 
     def _get_tool_icon(self, tool_info: ToolCallInfo) -> str:
         """Get appropriate icon for tool type."""
@@ -96,11 +99,11 @@ class AsyncStreamingHandler:
             return "⚙️"
 
     def _add_tool_call_message(self, tool_info: ToolCallInfo):
-        """Add tool call announcement to streaming display."""
+        """Add initial tool execution message."""
         icon = self._get_tool_icon(tool_info)
-        content = f"{icon} **Calling {tool_info.name}**"
+        content = f"{icon} **{tool_info.name}** ⚙️ Executing..."
 
-        # Add args preview if available
+        # Add args preview
         if tool_info.args:
             args_preview = str(tool_info.args)
             if len(args_preview) > 100:
@@ -108,43 +111,82 @@ class AsyncStreamingHandler:
             content += f"\n```json\n{args_preview}\n```"
 
         message = {
-            "role": "tool_call",
+            "role": "tool_execution",
             "content": content,
             "tool_name": tool_info.name,
             "tool_id": tool_info.call_id,
             "status": "executing",
+            "args": tool_info.args,
         }
 
+        # Add message and track its index
+        message_index = len(self.streaming_messages)
         self.streaming_messages.append(message)
+        self.tool_message_indices[tool_info.call_id] = message_index
+
+        # Track for summary
+        self.all_tool_executions.append(
+            {
+                "tool_id": tool_info.call_id,
+                "name": tool_info.name,
+                "args": tool_info.args,
+                "icon": icon,
+                "status": "executing",
+            }
+        )
+
         self._update_streaming_display()
 
-    def _add_tool_result_message(self, tool_info: ToolCallInfo):
-        """Add tool result to streaming display."""
+    def _update_tool_result_message(self, tool_info: ToolCallInfo):
+        """Update existing tool message with result."""
+        tool_id = tool_info.call_id
+
+        if tool_id not in self.tool_message_indices:
+            return
+
+        message_index = self.tool_message_indices[tool_id]
+        if message_index >= len(self.streaming_messages):
+            return
+
+        # Update the existing message
+        message = self.streaming_messages[message_index]
         icon = self._get_tool_icon(tool_info)
 
         if tool_info.status == ToolStatus.COMPLETED:
-            content = f"✅ **{tool_info.name} completed**"
+            # Update content to show completion
+            base_content = f"{icon} **{tool_info.name}** ✅ Completed"
+
+            # Add args
+            if tool_info.args:
+                args_preview = str(tool_info.args)
+                if len(args_preview) > 100:
+                    args_preview = args_preview[:100] + "..."
+                base_content += f"\n```json\n{args_preview}\n```"
+
+            message["content"] = base_content
+            message["status"] = "completed"
+
+            # Add result preview
             if tool_info.result:
-                # Show preview of result
                 result_preview = str(tool_info.result)
-                if len(result_preview) > 200:
-                    result_preview = result_preview[:200] + "..."
-                content += f"\n\n{result_preview}"
+                if len(result_preview) > 150:
+                    result_preview = result_preview[:150] + "..."
+                message["result_preview"] = result_preview
+                message["full_result"] = tool_info.result
         else:
-            content = f"❌ **{tool_info.name} failed**"
+            # Handle error case
+            message["content"] = f"{icon} **{tool_info.name}** ❌ Failed"
+            message["status"] = "failed"
             if tool_info.error:
-                content += f"\n\nError: {tool_info.error}"
+                message["error"] = tool_info.error
 
-        message = {
-            "role": "tool_result",
-            "content": content,
-            "tool_name": tool_info.name,
-            "tool_id": tool_info.call_id,
-            "full_result": tool_info.result,
-            "status": "completed",
-        }
+        # Update tool execution tracking
+        for exec_item in self.all_tool_executions:
+            if exec_item["tool_id"] == tool_id:
+                exec_item["status"] = "completed" if tool_info.status == ToolStatus.COMPLETED else "failed"
+                exec_item["result"] = tool_info.result
+                break
 
-        self.streaming_messages.append(message)
         self._update_streaming_display()
 
     def process_chunk(self, chunk: Dict[str, Any]):
@@ -190,8 +232,8 @@ class AsyncStreamingHandler:
                         tool_info.status = ToolStatus.COMPLETED
                         tool_info.result = latest_message.content
 
-                        # Add result to streaming display
-                        self._add_tool_result_message(tool_info)
+                        # Update existing tool message with result
+                        self._update_tool_result_message(tool_info)
 
                         # Remove from active tools
                         del self.active_tools[tool_id]
@@ -220,23 +262,56 @@ class AsyncStreamingHandler:
             raise
 
     def finalize_streaming(self):
-        """Transfer streaming messages to session state and clean up."""
-        # Add all streaming messages to session state
-        st.session_state.messages.extend(self.streaming_messages)
+        """Clean up streaming display and add final result to session state."""
+        if not self.streaming_container:
+            return
 
-        # Clear streaming display
-        if self.streaming_container:
-            self.streaming_container.empty()
+        # Clear the streaming display
+        self.streaming_container.empty()
 
-        # Show completion message
-        st.success(f"✅ **Completed** - {len(self.streaming_messages)} messages processed")
+        # Add final assistant response to session state (only once)
+        if self.current_response:
+            message_data = {"role": "assistant", "content": self.current_response}
+            if self.artifacts:
+                message_data["artifacts"] = self.artifacts
+            st.session_state.messages.append(message_data)
+
+        # Show tool execution summary
+        if self.all_tool_executions:
+            completed_tools = [t for t in self.all_tool_executions if t["status"] == "completed"]
+
+            with st.expander(f"🔧 Tool Execution Summary ({len(completed_tools)} tools executed)", expanded=False):
+                for tool_exec in self.all_tool_executions:
+                    icon = tool_exec["icon"]
+                    name = tool_exec["name"]
+                    status = tool_exec["status"]
+
+                    if status == "completed":
+                        st.success(f"{icon} **{name}** ✅ Completed")
+                    else:
+                        st.error(f"{icon} **{name}** ❌ Failed")
+
+                    # Show args
+                    if tool_exec.get("args"):
+                        st.code(str(tool_exec["args"]), language="json")
+
+                    # Show result if available
+                    if tool_exec.get("result"):
+                        with st.expander(f"View {name} result", expanded=False):
+                            st.text(str(tool_exec["result"]))
+
+                    st.markdown("---")
+
+        # Show completion status
+        completed_count = len([t for t in self.all_tool_executions if t["status"] == "completed"])
+        st.success(f"✅ **Task Completed** - {completed_count} tools executed successfully")
 
     def get_final_result(self) -> Dict[str, Any]:
         """Get the final streaming result."""
         return {
             "response": self.current_response,
             "artifacts": self.artifacts,
-            "total_messages": len(self.streaming_messages),
+            "total_tools": len(self.all_tool_executions),
         }
 
     def reset(self):
@@ -245,6 +320,8 @@ class AsyncStreamingHandler:
         self.current_response = ""
         self.artifacts = []
         self.streaming_messages.clear()
+        self.tool_message_indices.clear()
+        self.all_tool_executions.clear()
 
 
 def create_async_streaming_handler() -> AsyncStreamingHandler:
