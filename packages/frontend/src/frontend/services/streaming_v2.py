@@ -262,49 +262,31 @@ class AsyncStreamingHandler:
             raise
 
     def finalize_streaming(self):
-        """Clean up streaming display and add final result to session state."""
-        if not self.streaming_container:
-            return
+        """Finalize streaming and add results to permanent chat history."""
 
-        # Clear the streaming display
-        self.streaming_container.empty()
-
-        # Add final assistant response to session state (only once)
+        # Add tool execution summary as a separate message (only if tools were used)
+        if self.all_tool_executions:
+            # Add tool summary as a message with full results for expandable sections
+            tool_summary_message = {
+                "role": "assistant",
+                "tool_summary": True,
+                "content": "### 🔧 Tool Execution Summary",
+                "tool_executions": self.all_tool_executions,  # For detailed expandable view
+            }
+            st.session_state.messages.append(tool_summary_message)
+            # Add final assistant response to session state
         if self.current_response:
             message_data = {"role": "assistant", "content": self.current_response}
             if self.artifacts:
                 message_data["artifacts"] = self.artifacts
             st.session_state.messages.append(message_data)
 
-        # Show tool execution summary
-        if self.all_tool_executions:
-            completed_tools = [t for t in self.all_tool_executions if t["status"] == "completed"]
-
-            with st.expander(f"🔧 Tool Execution Summary ({len(completed_tools)} tools executed)", expanded=False):
-                for tool_exec in self.all_tool_executions:
-                    icon = tool_exec["icon"]
-                    name = tool_exec["name"]
-                    status = tool_exec["status"]
-
-                    if status == "completed":
-                        st.success(f"{icon} **{name}** ✅ Completed")
-                    else:
-                        st.error(f"{icon} **{name}** ❌ Failed")
-
-                    # Show args
-                    if tool_exec.get("args"):
-                        st.code(str(tool_exec["args"]), language="json")
-
-                    # Show result if available
-                    if tool_exec.get("result"):
-                        with st.expander(f"View {name} result", expanded=False):
-                            st.text(str(tool_exec["result"]))
-
-                    st.markdown("---")
-
-        # Show completion status
-        completed_count = len([t for t in self.all_tool_executions if t["status"] == "completed"])
-        st.success(f"✅ **Task Completed** - {completed_count} tools executed successfully")
+        # Clear streaming display and show completion
+        if self.streaming_container:
+            self.streaming_container.empty()
+            with self.streaming_container.container():
+                st.success("✅ **Streaming completed** - Results added to chat history")
+                st.info("👆 Check the chat above for the complete response and tool execution details")
 
     def get_final_result(self) -> Dict[str, Any]:
         """Get the final streaming result."""

@@ -70,6 +70,28 @@ def _render_chat_area():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
+                # Handle tool summary with expandable details
+                if message.get("tool_summary") and message.get("tool_executions"):
+                    with st.expander("🔍 View Detailed Tool Results", expanded=False):
+                        for tool_exec in message["tool_executions"]:
+                            st.markdown(f"**{tool_exec['icon']} {tool_exec['name']}**")
+
+                            # Show full args
+                            if tool_exec.get("args"):
+                                st.code(str(tool_exec["args"]), language="json")
+
+                            # Show full result
+                            if tool_exec.get("result"):
+                                st.text_area(
+                                    f"Full result from {tool_exec['name']}:",
+                                    str(tool_exec["result"]),
+                                    height=100,
+                                    disabled=True,
+                                    key=f"tool_result_{tool_exec['tool_id']}",
+                                )
+
+                            st.markdown("---")
+
                 # Handle artifacts inline with message
                 if "artifacts" in message and message["artifacts"]:
                     selected_artifact_id = render_artifacts(
@@ -153,8 +175,9 @@ def _stream_graph_response(content: str):
             response_content = result["response"]
             response_artifacts = result["artifacts"]
 
-            # The streaming handler already added all messages to session state
-            # No need to display anything here as it's handled in the chat flow
+            # The streaming handler has added all messages to session state
+            # Trigger a rerun to refresh the chat display with permanent history
+            st.rerun()
             return
 
         else:
