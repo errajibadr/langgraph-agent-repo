@@ -7,6 +7,7 @@ in the Streamlit frontend. Each graph has metadata and factory functions.
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
+from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.agents.clarify_agent import get_clarify_graph
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -45,6 +46,18 @@ class GraphCatalog:
                     "checkpointer": InMemorySaver(),
                 },
                 icon="❓",
+            ),
+            "supervisor_agent": GraphInfo(
+                id="supervisor_agent",
+                name="Supervisor Agent",
+                description="AI-OPS supervisor agent that orchestrates investigation and monitoring tasks",
+                category="Supervision",
+                factory_function=get_supervisor_graph,
+                default_config={
+                    "name": "SupervisorAgent",
+                    "checkpointer": InMemorySaver(),
+                },
+                icon="👔",
             ),
             # Future graphs can be added here:
             # "research_agent": GraphInfo(...),

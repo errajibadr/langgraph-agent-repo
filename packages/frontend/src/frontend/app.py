@@ -7,6 +7,7 @@ including LLMaaS, LLMaaS Dev, and Custom providers with configurable settings.
 
 import streamlit as st
 from dotenv import load_dotenv
+
 from frontend.components import render_chat_interface, render_sidebar
 from frontend.services import init_session_state
 
@@ -32,4 +33,8 @@ def main():
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     main()
