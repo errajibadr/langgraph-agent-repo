@@ -1,5 +1,7 @@
 """Component for displaying clarification artifacts in Streamlit."""
 
+import uuid
+
 import streamlit as st
 
 
@@ -30,7 +32,8 @@ def render_artifacts(artifacts, key_prefix="artifacts"):
 
         for col_idx, artifact in enumerate(row_artifacts):
             with cols[col_idx]:
-                button_key = f"{key_prefix}_{artifact.id}_{row_idx}_{col_idx}"
+                # Generate unique key using UUID to prevent duplicates
+                button_key = f"{key_prefix}_{artifact.id}_{str(uuid.uuid4())[:8]}"
 
                 if st.button(
                     f"🎯 {artifact.title}", key=button_key, help=artifact.description, use_container_width=True
@@ -65,7 +68,7 @@ def render_artifacts_compact(artifacts, key_prefix="artifacts_compact"):
     selected_display = st.selectbox(
         "Available options:",
         options=list(artifact_options.keys()),
-        key=f"{key_prefix}_selectbox",
+        key=f"{key_prefix}_selectbox_{str(uuid.uuid4())[:8]}",
         help="Select one of the clarification options",
     )
 
@@ -73,7 +76,7 @@ def render_artifacts_compact(artifacts, key_prefix="artifacts_compact"):
         selected_artifact_id = artifact_options[selected_display]
 
         # Confirm button
-        if st.button("✅ Confirm Selection", key=f"{key_prefix}_confirm"):
+        if st.button("✅ Confirm Selection", key=f"{key_prefix}_confirm_{str(uuid.uuid4())[:8]}"):
             return selected_artifact_id
 
     return None

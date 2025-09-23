@@ -59,6 +59,11 @@ def _render_header():
             st.session_state.messages = []
             # Generate new thread_id for new conversation
             st.session_state.thread_id = str(uuid.uuid4())
+            # Clear any persisted seen tool ids to avoid stale filtering
+            if "seen_tool_call_ids" in st.session_state:
+                del st.session_state.seen_tool_call_ids
+            if "seen_tool_result_ids" in st.session_state:
+                del st.session_state.seen_tool_result_ids
             st.rerun()
 
 
@@ -85,12 +90,14 @@ def _render_chat_area():
 
                             # Show full result
                             if tool_exec.get("result"):
+                                # Generate unique key to prevent duplicates
+                                unique_key = f"tool_result_{tool_exec['tool_id']}_{str(uuid.uuid4())[:8]}"
                                 st.text_area(
                                     f"Full result from {beautiful_name}:",
                                     str(tool_exec["result"]),
                                     height=100,
                                     disabled=True,
-                                    key=f"tool_result_{tool_exec['tool_id']}",
+                                    key=unique_key,
                                 )
 
                             st.markdown("---")
@@ -137,6 +144,9 @@ def _render_chat_area():
 
 def _process_interaction(content: str):
     """Unified processing for all user interactions (text input and artifact selections)."""
+    # Clean up old artifacts from previous messages to prevent accumulation
+    _cleanup_old_artifacts()
+
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": content})
 
@@ -168,16 +178,8 @@ def _stream_graph_response(content: str):
 
         context = {"user_id": st.session_state.user_id, "model": st.session_state.current_model.model_name}
 
-        # Check if this is a supervisor agent for advanced streaming
-        graph_id = st.session_state.get("current_graph_id", "")
-        is_supervisor = graph_id == "supervisor_agent"
-
-        # if is_supervisor:
-        # Use new async streaming for supervisor agent with chat flow integration
-        result = run_async_streaming(st.session_state.current_graph, input_state, config, context)
-
-        response_content = result["response"]
-        response_artifacts = result["artifacts"]
+        # Use async streaming for all agents with chat flow integration
+        run_async_streaming(st.session_state.current_graph, input_state, config, context)
 
         # The streaming handler has added all messages to session state
         # Trigger a rerun to refresh the chat display with permanent history
@@ -252,6 +254,23 @@ def _init_chat_session():
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
+
+def _cleanup_old_artifacts():
+    """Clean up old artifacts from previous messages to prevent UI conflicts."""
+    for message in st.session_state.messages:
+        if "artifacts" in message and message["artifacts"]:
+            # Convert artifacts to text summary and remove the interactive artifacts
+            artifact_summary = []
+            for artifact in message["artifacts"]:
+                artifact_summary.append(f"• {artifact.title}: {artifact.description}")
+
+            # Add artifact summary to the message content if not already there
+            if artifact_summary and "Available options were:" not in message["content"]:
+                message["content"] += "\n\n**Available options were:**\n" + "\n".join(artifact_summary)
+
+            # Remove the interactive artifacts
+            del message["artifacts"]
 
 
 def _get_current_temperature() -> float:
