@@ -53,7 +53,7 @@ def get_deepsearch_graph(
         state_schema=state_schema, input_schema=input_schema, output_schema=output_schema, context_schema=context_schema
     )
 
-    clarify = get_clarify_graph(name="ClarifyAgent", is_subgraph=True, next_node="orchestrate")
+    clarify = get_clarify_graph(name="ClarifyAgent", is_subgraph=True, parent_next_node="orchestrate")
     supervisor = get_supervisor_graph(name="SupervisorAgent")
 
     # Add nodes

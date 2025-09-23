@@ -30,7 +30,7 @@ def get_clarify_graph(
     enrich_query_enabled: bool = False,
     max_rounds: int = 3,
     is_subgraph: bool = False,
-    next_node: str = "__end__",
+    parent_next_node: str = "__end__",
     **kwargs,
 ) -> CompiledStateGraph[ClarifyState, ClarifyContext, ClarifyState, ClarifyState]:
     """Create a clarify graph for disambiguating user queries.
@@ -49,9 +49,7 @@ def get_clarify_graph(
         Compiled state graph for clarification workflow
     """
 
-    async def model_node(
-        state: ClarifyState, runtime: Runtime[ClarifyContext]
-    ) -> Command[Literal["__end__", "enrich_query"]]:
+    async def model_node(state: ClarifyState, runtime: Runtime[ClarifyContext]) -> Command:
         """Main clarification node that processes user queries.
 
         This node uses an LLM to determine if clarification is needed
@@ -91,6 +89,7 @@ def get_clarify_graph(
         command_config["goto"] = goto
         if is_subgraph:
             command_config["graph"] = Command.PARENT
+            command_config["goto"] = parent_next_node if not clarify_response.need_clarification else "__end__"
 
         print(f"Command config: {command_config}")
 

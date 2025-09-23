@@ -7,6 +7,7 @@ in the Streamlit frontend. Each graph has metadata and factory functions.
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
+from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.agents.clarify_agent import get_clarify_graph
 from langgraph.checkpoint.memory import InMemorySaver
@@ -34,6 +35,18 @@ class GraphCatalog:
     def _initialize_catalog(self) -> Dict[str, GraphInfo]:
         """Initialize the catalog with available graphs."""
         return {
+            "aiops_deepsearch_agent": GraphInfo(
+                id="aiops_deepsearch_agent",
+                name="AI-OPS Deep Search Agent",
+                description="AI-OPS deep search agent that disambiguates user queries before planning and routing to specialist agents",
+                category="Deep Search",
+                factory_function=get_deepsearch_graph,
+                default_config={
+                    "name": "DeepSearchAgent",
+                    "checkpointer": InMemorySaver(),
+                },
+                icon="👔",
+            ),
             "clarify_agent": GraphInfo(
                 id="clarify_agent",
                 name="Clarify Agent",
