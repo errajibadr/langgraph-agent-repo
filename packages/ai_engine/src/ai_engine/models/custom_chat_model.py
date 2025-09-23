@@ -62,11 +62,12 @@ def create_chat_model(provider: Union[str, ProviderType] | None = None, **kwargs
     provider_settings = ProviderFactory.get_provider_settings(provider)
     print(f"Provider settings: {provider_settings}")
 
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
     # Convert provider settings to dict and filter out None values
     config = {k: v for k, v in provider_settings.model_dump().items() if v is not None}
-
     # Override with any provided kwargs
     config.update(kwargs)
+    config = {k: v for k, v in config.items() if v is not None}
 
     # Handle special case: remove None top_p to avoid passing None to ChatOpenAI
     if config.get("top_p") is None:

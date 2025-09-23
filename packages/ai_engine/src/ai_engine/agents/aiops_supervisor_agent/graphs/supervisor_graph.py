@@ -164,11 +164,13 @@ def get_supervisor_graph(
         This node uses an LLM to determine if clarification is needed
         and generates appropriate questions or verification messages.
         """
-        supervisor_model = create_chat_model(provider="groq").bind_tools(list(supervisor_tools_list.values()))
+
         context = runtime.context or {}
         runtime_prompt = context.get("supervisor_system_prompt", "") if runtime.context else ""
         user_id = context.get("user_id", None)
         user_context = get_user_context(user_id)
+        model = context.get("model", None)
+        supervisor_model = create_chat_model(model=model).bind_tools(list(supervisor_tools_list.values()))
 
         print(f"iteration: {state.get('research_iteration', 0)}")
         # Prepare template parameters with defaults
@@ -199,6 +201,9 @@ def get_supervisor_graph(
 
 
 async def main():
+    from dotenv import load_dotenv
+
+    load_dotenv()
     """Demonstrate streaming parser with supervisor graph."""
     graph = get_supervisor_graph(name="supervisor_graph")
     config = {"configurable": {"thread_id": "thread-1"}}
