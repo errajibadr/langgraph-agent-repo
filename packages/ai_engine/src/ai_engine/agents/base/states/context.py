@@ -9,6 +9,7 @@ class BaseContext(TypedDict):
     """Base context for the agent workflows."""
 
     user_id: str
+    model: str
 
 
 ## Model Context

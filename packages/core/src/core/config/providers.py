@@ -23,7 +23,7 @@ class BaseProviderSettings(BaseSettings):
     top_p: Optional[float] = Field(
         default=None, ge=0.0, le=1.0, description="Nucleus sampling probability (None = disabled)"
     )
-    max_tokens: Optional[int] = Field(default=1000, ge=1, le=4096, description="Maximum tokens in response")
+    max_tokens: Optional[int] = Field(default=32000, ge=1, le=128000, description="Maximum tokens in response")
 
     @field_validator("api_key", "base_url", "model", mode="before")
     @classmethod

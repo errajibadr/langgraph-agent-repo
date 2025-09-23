@@ -29,6 +29,8 @@ def get_clarify_graph(
     system_prompt: str | None = None,
     enrich_query_enabled: bool = False,
     max_rounds: int = 3,
+    is_subgraph: bool = False,
+    next_node: str = "__end__",
     **kwargs,
 ) -> CompiledStateGraph[ClarifyState, ClarifyContext, ClarifyState, ClarifyState]:
     """Create a clarify graph for disambiguating user queries.
@@ -78,15 +80,23 @@ def get_clarify_graph(
         # Get clarification response
         clarify_response: ClarifyWithUser = await model.ainvoke([system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
 
+        command_config = {"goto": "__end__"}
         # Determine next step
         goto: Literal["__end__", "enrich_query"]
-        if clarify_response.need_clarification or enrich_query_enabled:
+        if clarify_response.need_clarification and enrich_query_enabled:
             goto = "enrich_query"
         else:
             goto = "__end__"
 
+        command_config["goto"] = goto
+        if is_subgraph:
+            command_config["graph"] = Command.PARENT
+
+        print(f"Command config: {command_config}")
+
         return Command(
-            goto=goto,
+            goto=command_config["goto"],
+            graph=command_config.get("graph", None),
             update={
                 "current_round": +1,
                 "messages": [
