@@ -49,7 +49,7 @@ class LLMaaSDevSettings(BaseProviderSettings):
         env_prefix="LLMAAS_DEV_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+    model: Optional[str] = Field(default="Meta-llama33-70b-instruct", description="Name of the model to use")
 
 
 class GroqSettings(BaseProviderSettings):
@@ -69,7 +69,7 @@ class CustomProviderSettings(BaseProviderSettings):
         env_prefix="", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model: Optional[str] = Field(default="gpt-4.1-mini", description="Name of the model to use")
+    model: Optional[str] = Field(default="openai/gpt-oss-20b", description="Name of the model to use")
 
 
 class ProviderFactory:

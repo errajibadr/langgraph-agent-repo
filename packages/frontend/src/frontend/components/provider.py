@@ -10,13 +10,33 @@ from core.types import ProviderType
 def render_provider_selector() -> Tuple[ProviderType, str]:
     """Render provider selection dropdown."""
     provider_options = {
-        "Groq": ProviderType.GROQ,
         "Custom": ProviderType.CUSTOM,
         "LLMaaS": ProviderType.LLMAAS,
         "LLMaaS Dev": ProviderType.LLMAAS_DEV,
     }
 
-    selected_name = st.selectbox("Select Provider", options=list(provider_options.keys()), index=0)
+    # Get default provider from environment variable
+    env_provider = os.getenv("LLM_PROVIDER", ProviderType.CUSTOM.value)
+
+    # Find the default index based on environment variable
+    default_index = 0
+    try:
+        env_provider_type = ProviderType(env_provider)
+        # Find the display name for the environment provider
+        for display_name, provider_type in provider_options.items():
+            if provider_type == env_provider_type:
+                default_index = list(provider_options.keys()).index(display_name)
+                break
+    except ValueError:
+        # If invalid provider in env, default to first option
+        default_index = 0
+
+    selected_name = st.selectbox(
+        "Select Provider",
+        options=list(provider_options.keys()),
+        index=default_index,
+        help=f"Default provider from .env: {env_provider}",
+    )
     selected_provider = provider_options[selected_name]
 
     return selected_provider, selected_name
