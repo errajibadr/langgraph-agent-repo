@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage
 
 from frontend.services.streaming_v2 import run_async_streaming
 from frontend.types import CreativityLevel
+from frontend.utils.formatting import beautify_tool_name
 
 from .artifacts_display import render_artifacts
 from .configuration import render_example_configurations
@@ -74,7 +75,9 @@ def _render_chat_area():
                 if message.get("tool_summary") and message.get("tool_executions"):
                     with st.expander("🔍 View Detailed Tool Results", expanded=False):
                         for tool_exec in message["tool_executions"]:
-                            st.markdown(f"**{tool_exec['icon']} {tool_exec['name']}**")
+                            # Beautify tool name for display
+                            beautiful_name = beautify_tool_name(tool_exec["name"])
+                            st.markdown(f"**{tool_exec['icon']} {beautiful_name}**")
 
                             # Show full args
                             if tool_exec.get("args"):
@@ -83,7 +86,7 @@ def _render_chat_area():
                             # Show full result
                             if tool_exec.get("result"):
                                 st.text_area(
-                                    f"Full result from {tool_exec['name']}:",
+                                    f"Full result from {beautiful_name}:",
                                     str(tool_exec["result"]),
                                     height=100,
                                     disabled=True,

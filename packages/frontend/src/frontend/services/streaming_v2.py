@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Set
 import streamlit as st
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
+from frontend.utils.formatting import beautify_tool_name
+
 
 class ToolStatus(Enum):
     """Status of a tool call execution."""
@@ -105,7 +107,8 @@ class AsyncStreamingHandler:
     def _add_tool_call_message(self, tool_info: ToolCallInfo):
         """Add initial tool execution message."""
         icon = self._get_tool_icon(tool_info)
-        content = f"{icon} **{tool_info.name}** ⚙️ Executing..."
+        beautiful_name = beautify_tool_name(tool_info.name)
+        content = f"{icon} **{beautiful_name}** ⚙️ Executing..."
 
         # Add args preview
         if tool_info.args:
@@ -158,7 +161,8 @@ class AsyncStreamingHandler:
 
         if tool_info.status == ToolStatus.COMPLETED:
             # Update content to show completion
-            base_content = f"{icon} **{tool_info.name}** ✅ Completed"
+            beautiful_name = beautify_tool_name(tool_info.name)
+            base_content = f"{icon} **{beautiful_name}** ✅ Completed"
 
             # Add args
             if tool_info.args:
@@ -179,7 +183,8 @@ class AsyncStreamingHandler:
                 message["full_result"] = tool_info.result
         else:
             # Handle error case
-            message["content"] = f"{icon} **{tool_info.name}** ❌ Failed"
+            beautiful_name = beautify_tool_name(tool_info.name)
+            message["content"] = f"{icon} **{beautiful_name}** ❌ Failed"
             message["status"] = "failed"
             if tool_info.error:
                 message["error"] = tool_info.error
