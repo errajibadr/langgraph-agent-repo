@@ -70,7 +70,7 @@ def _render_header():
 def _render_chat_area():
     """Render the chat messages and input area."""
     # Display chat history with inline artifact handling
-    for message in st.session_state.messages:
+    for message_idx, message in enumerate(st.session_state.messages):
         # Handle different message types for natural chat flow
         if message["role"] in ["user", "assistant"]:
             with st.chat_message(message["role"]):
@@ -104,16 +104,12 @@ def _render_chat_area():
 
                 # Handle artifacts inline with message
                 if "artifacts" in message and message["artifacts"]:
-                    selected_artifact_id = render_artifacts(
-                        message["artifacts"], key_prefix=f"msg_{message.get('message_id', 'unknown')}"
-                    )
+                    selected_index = render_artifacts(message["artifacts"], key_prefix=f"msg_{message_idx}")
 
-                    if selected_artifact_id:
+                    if selected_index is not None:
                         # Process artifact selection as a new user interaction
-                        selected_artifact = next(
-                            (a for a in message["artifacts"] if a.id == selected_artifact_id), None
-                        )
-                        if selected_artifact:
+                        if 0 <= selected_index < len(message["artifacts"]):
+                            selected_artifact = message["artifacts"][selected_index]
                             artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
                             _process_interaction(artifact_content)
                             st.rerun()

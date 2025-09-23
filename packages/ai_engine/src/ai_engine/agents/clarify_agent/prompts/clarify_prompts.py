@@ -47,14 +47,14 @@ Respond in valid JSON format with these exact keys:
 "artifacts": [array of clarification artifacts - see format below]
 
 ARTIFACTS: When asking clarifying questions with specific options, create artifacts that users can click on:
-- Each artifact should have: "id", "title", "description" 
+- Each artifact should have: "title", "description"
 - Maximum 4 artifacts per response
 - Use artifacts for: app selection, environment choice, time ranges, analysis types, etc.
 
 Artifact examples:
-- App selection: {{"id": "app1", "title": "Production API", "description": "Main customer-facing API service"}}
-- Time range: {{"id": "last_hour", "title": "Last Hour", "description": "Issues from the past 60 minutes"}}  
-- Environment: {{"id": "prod_env", "title": "Production", "description": "Live production environment"}}
+- App selection: {{"title": "Production API", "description": "Main customer-facing API service"}}
+- Time range: {{"title": "Last Hour", "description": "Issues from the past 60 minutes"}}  
+- Environment: {{"title": "Production", "description": "Live production environment"}}
 
 If you need to ask a clarifying question:
 {{

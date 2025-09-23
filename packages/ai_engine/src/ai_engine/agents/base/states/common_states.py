@@ -4,28 +4,18 @@ This module contains reusable state classes and schemas that can be shared
 across different agents to avoid duplication and ensure consistency.
 """
 
-from enum import Enum
-
+from core.models import Artifact as BaseArtifact
 from pydantic import BaseModel, Field
 
 
-class ArtifactType(str, Enum):
-    """Type of the artifact."""
-
-    USER_CHOICE = "user_choice"
-
-
-class ClarificationArtifact(BaseModel):
+class ClarificationArtifact(BaseArtifact):
     """Artifact for clarification options that users can select.
 
     These artifacts provide concrete options that users can click on
     instead of having to type their response.
     """
 
-    id: str = Field(description="Unique identifier for the artifact")
-    type: ArtifactType = Field(description="Type of the artifact")
-    title: str = Field(description="Display title shown to the user")
-    description: str = Field(description="Brief description of what this option does")
+    pass
 
 
 class ClarifyWithUser(BaseModel):
