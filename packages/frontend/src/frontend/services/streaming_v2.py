@@ -69,7 +69,7 @@ class AsyncStreamingHandler:
 
     def initialize_streaming_display(self):
         """Initialize the streaming display container."""
-        st.markdown("🚀 **Supervisor Agent - Live Streaming**")
+        st.markdown("🚀 **Agent - Live Streaming**")
         self.streaming_container = st.empty()
 
     def _update_streaming_display(self):

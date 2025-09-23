@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
 
-def create_chat_model(provider: Union[str, ProviderType] = ProviderType.CUSTOM, **kwargs) -> ChatOpenAI:
+def create_chat_model(provider: Union[str, ProviderType] | None = None, **kwargs) -> ChatOpenAI:
     """
     Factory function to create a ChatOpenAI instance with provider-specific configuration.
 
@@ -57,8 +57,10 @@ def create_chat_model(provider: Union[str, ProviderType] = ProviderType.CUSTOM, 
     if isinstance(provider, str):
         provider = ProviderType(provider.lower())
 
+    print(f"Provider: {provider}")
     # Get provider-specific settings
     provider_settings = ProviderFactory.get_provider_settings(provider)
+    print(f"Provider settings: {provider_settings}")
 
     # Convert provider settings to dict and filter out None values
     config = {k: v for k, v in provider_settings.model_dump().items() if v is not None}

@@ -165,79 +165,79 @@ def _stream_graph_response(content: str):
 
         # Configuration with thread_id and context
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
-        context = {"user_id": st.session_state.user_id}
+
+        context = {"user_id": st.session_state.user_id, "model": st.session_state.current_model.model_name}
 
         # Check if this is a supervisor agent for advanced streaming
         graph_id = st.session_state.get("current_graph_id", "")
         is_supervisor = graph_id == "supervisor_agent"
 
-        if is_supervisor:
-            # Use new async streaming for supervisor agent with chat flow integration
-            result = run_async_streaming(st.session_state.current_graph, input_state, config, context)
+        # if is_supervisor:
+        # Use new async streaming for supervisor agent with chat flow integration
+        result = run_async_streaming(st.session_state.current_graph, input_state, config, context)
 
-            response_content = result["response"]
-            response_artifacts = result["artifacts"]
+        response_content = result["response"]
+        response_artifacts = result["artifacts"]
 
-            # The streaming handler has added all messages to session state
-            # Trigger a rerun to refresh the chat display with permanent history
-            st.rerun()
-            return
+        # The streaming handler has added all messages to session state
+        # Trigger a rerun to refresh the chat display with permanent history
+        st.rerun()
 
-        else:
-            # Use traditional streaming for other agents
-            with st.spinner(f"Processing with {st.session_state.current_graph_info.name}..."):
-                response_content = ""
-                response_artifacts = []
+        # else:
+        #     # Use traditional streaming for other agents
+        #     with st.spinner(f"Processing with {st.session_state.current_graph_info.name}..."):
+        #         response_content = ""
+        #         response_artifacts = []
 
-                for chunk in st.session_state.current_graph.stream(
-                    input_state,
-                    config=config,
-                    context=context,
-                    stream_mode="values",
-                ):
-                    if isinstance(chunk, dict):
-                        if "messages" in chunk and chunk["messages"]:
-                            latest_message = chunk["messages"][-1]
-                            if hasattr(latest_message, "content"):
-                                response_content = latest_message.content
+        #         for chunk in st.session_state.current_graph.stream(
+        #             input_state,
+        #             config=config,
+        #             context=context,
+        #             stream_mode="values",
+        #         ):
+        #             if isinstance(chunk, dict):
+        #                 if "messages" in chunk and chunk["messages"]:
+        #                     latest_message = chunk["messages"][-1]
+        #                     if hasattr(latest_message, "content"):
+        #                         response_content = latest_message.content
 
-                        if "artifacts" in chunk and chunk["artifacts"]:
-                            response_artifacts = chunk["artifacts"]
+        #                 if "artifacts" in chunk and chunk["artifacts"]:
+        #                     response_artifacts = chunk["artifacts"]
 
         # Display response content and handle artifacts (common for both modes)
-        if response_content:
-            if not is_supervisor:  # Only display if not already shown in async mode
-                st.markdown(response_content)
+        # if response_content:
+        #     if not is_supervisor:  # Only display if not already shown in async mode
+        #         st.markdown(response_content)
 
-            # Create message data with artifacts
-            message_id = str(uuid.uuid4())
-            message_data = {"role": "assistant", "content": response_content, "message_id": message_id}
+        #     # Create message data with artifacts
+        #     message_id = str(uuid.uuid4())
+        #     message_data = {"role": "assistant", "content": response_content, "message_id": message_id}
 
-            # Add artifacts to message if present
-            if response_artifacts:
-                message_data["artifacts"] = response_artifacts
+        #     # Add artifacts to message if present
+        #     if response_artifacts:
+        #         message_data["artifacts"] = response_artifacts
 
-                # Display artifacts immediately in current context
-                selected_artifact_id = render_artifacts(response_artifacts, key_prefix=f"current_{message_id}")
+        #         # Display artifacts immediately in current context
+        #         selected_artifact_id = render_artifacts(response_artifacts, key_prefix=f"current_{message_id}")
 
-                # Handle immediate artifact selection
-                if selected_artifact_id:
-                    selected_artifact = next((a for a in response_artifacts if a.id == selected_artifact_id), None)
-                    if selected_artifact:
-                        # Add to chat history first
-                        st.session_state.messages.append(message_data)
+        #         # Handle immediate artifact selection
+        #         if selected_artifact_id:
+        #             selected_artifact = next((a for a in response_artifacts if a.id == selected_artifact_id), None)
+        #             if selected_artifact:
+        #                 # Add to chat history first
+        #                 st.session_state.messages.append(message_data)
 
-                        # Process artifact selection
-                        artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
-                        _process_interaction(artifact_content)
-                        st.rerun()
-                        return
+        #                 # Process artifact selection
+        #                 artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
+        #                 _process_interaction(artifact_content)
+        #                 st.rerun()
+        #                 return
 
-            # Add to chat history
-            st.session_state.messages.append(message_data)
+        #     # Add to chat history
+        #     st.session_state.messages.append(message_data)
 
-        else:
-            st.warning("No response received from agent.")
+        # else:
+        #     st.warning("No response received from agent.")
 
     except Exception as e:
         st.error(f"Error generating response: {str(e)}")

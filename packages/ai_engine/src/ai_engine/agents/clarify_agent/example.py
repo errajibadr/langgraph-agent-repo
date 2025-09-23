@@ -23,7 +23,7 @@ class InputState(TypedDict):
     artifacts: Annotated[list[ClarificationArtifact], add]
 
 
-def main():
+async def main():
     """Example usage of the clarify agent."""
     # Create the clarify graph
     clarify_graph = get_clarify_graph(
@@ -33,7 +33,7 @@ def main():
 
     # Configuration with thread ID for conversation tracking
     config = {"configurable": {"thread_id": "example-thread-1"}}
-    context = ClarifyContext(user_id="example-user-1", clarify_system_prompt="You are a helpful assistant.")
+    context = ClarifyContext(user_id="example-user-1")  # type: ignore
     # Example user query that needs clarification
     initial_state = InputState(
         messages=[HumanMessage("Show me the recent issues with my app")],
@@ -45,10 +45,10 @@ def main():
     # Stream the conversation
     print("=== Clarify Agent Example ===")
 
-    for chunk in clarify_graph.stream(
+    async for chunk in clarify_graph.astream(
         initial_state,
         config=config,  # type: ignore
-        context=context,  # type: ignore
+        context={**context, "model": "openai/gpt-oss-20b"},  # type: ignore
         stream_mode="values",
     ):
         if isinstance(chunk, dict):
@@ -66,7 +66,9 @@ def main():
 
 
 if __name__ == "__main__":
+    import asyncio
+
     from dotenv import load_dotenv
 
     load_dotenv()
-    main()
+    asyncio.run(main())

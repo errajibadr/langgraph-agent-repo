@@ -57,8 +57,9 @@ def get_clarify_graph(
         """
         context = runtime.context or {}
         runtime_prompt = runtime.context.get("clarify_system_prompt", "") if runtime.context else ""
-
-        print(f"state: {state.get('current_round', 0)}")
+        model = runtime.context.get("model")
+        print(f"Model: {model}")
+        print(f"iteration: {state.get('current_round', 0)}")
         # Prepare template parameters with defaults
         params = {
             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -72,10 +73,10 @@ def get_clarify_graph(
         prompt_template = runtime_prompt or system_prompt or CLARIFY_AIOPS_PROMPT.format(**params)
         system_message = SystemMessage(content=prompt_template)
 
-        model = create_chat_model().with_structured_output(ClarifyWithUser)
+        model = create_chat_model(model=model).with_structured_output(ClarifyWithUser)
 
         # Get clarification response
-        clarify_response: ClarifyWithUser = await model.ainvoke(input=[system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
+        clarify_response: ClarifyWithUser = await model.ainvoke([system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
 
         # Determine next step
         goto: Literal["__end__", "enrich_query"]
@@ -115,3 +116,11 @@ def get_clarify_graph(
     # Compile and return
     compiled_graph = graph.compile(name=name or "ClarifyAgent", **kwargs)
     return compiled_graph
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    create_chat_model()

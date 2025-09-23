@@ -90,6 +90,7 @@ class ProviderFactory:
         if provider is None:
             # Read from environment with fallback to CUSTOM
             provider_str = os.getenv("LLM_PROVIDER", ProviderType.CUSTOM.value)
+            print(f"Detected Provider: {provider_str}")
             provider = ProviderType(provider_str)
 
         if provider not in ProviderFactory._provider_map:

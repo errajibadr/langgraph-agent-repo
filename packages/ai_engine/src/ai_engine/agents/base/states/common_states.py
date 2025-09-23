@@ -45,6 +45,6 @@ class ClarifyWithUser(BaseModel):
     )
     artifacts: list[ClarificationArtifact] = Field(
         default_factory=list,
-        max_length=4,
+        # max_length=4,
         description="Clarification artifacts - concrete options the user can select (max 4)",
     )
