@@ -58,6 +58,10 @@ class AsyncStreamingHandler:
         # Track all tool executions for summary
         self.all_tool_executions: List[Dict[str, Any]] = []
 
+        # Track processed tool call IDs to avoid duplicates
+        self.processed_tool_call_ids: Set[str] = set()
+        self.processed_tool_result_ids: Set[str] = set()
+
         # UI containers for real-time streaming display
         self.streaming_container = None
 
@@ -193,50 +197,62 @@ class AsyncStreamingHandler:
         """Process a streaming chunk and update display in real-time."""
         try:
             if "messages" in chunk and chunk["messages"]:
-                latest_message = chunk["messages"][-1]
+                messages = chunk["messages"]
 
-                # Handle AI message with potential tool calls
-                if isinstance(latest_message, AIMessage):
-                    # Update current response content
-                    if latest_message.content and latest_message.content != self.current_response:
-                        self.current_response = latest_message.content
+                # Process messages looking for new tool calls and pending tool results
+                for message in messages:
+                    # Handle AI message with potential tool calls
+                    if isinstance(message, AIMessage):
+                        # Update current response content (only from the latest AI message)
+                        if message.content and message.content != self.current_response:
+                            self.current_response = message.content
 
-                        # Update the last assistant message or add new one
-                        if self.streaming_messages and self.streaming_messages[-1]["role"] == "assistant":
-                            self.streaming_messages[-1]["content"] = self.current_response
-                        else:
-                            self.streaming_messages.append({"role": "assistant", "content": self.current_response})
+                            # Update the last assistant message or add new one
+                            if self.streaming_messages and self.streaming_messages[-1]["role"] == "assistant":
+                                self.streaming_messages[-1]["content"] = self.current_response
+                            else:
+                                self.streaming_messages.append({"role": "assistant", "content": self.current_response})
 
-                        self._update_streaming_display()
+                        # Handle tool calls - only process NEW tool call IDs
+                        if hasattr(message, "tool_calls") and message.tool_calls:
+                            for tool_call in message.tool_calls:
+                                tool_call_id = tool_call.get("id")
+                                if (
+                                    tool_call_id
+                                    and tool_call_id not in self.processed_tool_call_ids
+                                    and tool_call_id not in self.active_tools
+                                ):
+                                    # Mark as processed
+                                    self.processed_tool_call_ids.add(tool_call_id)
 
-                    # Handle tool calls - add them to streaming display
-                    if hasattr(latest_message, "tool_calls") and latest_message.tool_calls:
-                        for tool_call in latest_message.tool_calls:
-                            # Only add if not already added and has valid id
-                            tool_call_id = tool_call.get("id")
-                            if tool_call_id and tool_call_id not in self.active_tools:
-                                tool_info = ToolCallInfo(
-                                    call_id=tool_call_id,
-                                    name=tool_call.get("name", "unknown_tool"),
-                                    args=tool_call.get("args", {}),
-                                    status=ToolStatus.EXECUTING,
-                                )
-                                self.active_tools[tool_call_id] = tool_info
-                                self._add_tool_call_message(tool_info)
+                                    tool_info = ToolCallInfo(
+                                        call_id=tool_call_id,
+                                        name=tool_call.get("name", "unknown_tool"),
+                                        args=tool_call.get("args", {}),
+                                        status=ToolStatus.EXECUTING,
+                                    )
+                                    self.active_tools[tool_call_id] = tool_info
+                                    self._add_tool_call_message(tool_info)
 
-                # Handle tool message (tool result)
-                elif isinstance(latest_message, ToolMessage):
-                    tool_id = latest_message.tool_call_id
-                    if tool_id and tool_id in self.active_tools:
-                        tool_info = self.active_tools[tool_id]
-                        tool_info.status = ToolStatus.COMPLETED
-                        tool_info.result = latest_message.content
+                    # Handle tool message (tool result) - only process NEW results for PENDING tools
+                    elif isinstance(message, ToolMessage):
+                        tool_id = message.tool_call_id
+                        if tool_id and tool_id not in self.processed_tool_result_ids and tool_id in self.active_tools:
+                            # Mark result as processed
+                            self.processed_tool_result_ids.add(tool_id)
 
-                        # Update existing tool message with result
-                        self._update_tool_result_message(tool_info)
+                            tool_info = self.active_tools[tool_id]
+                            tool_info.status = ToolStatus.COMPLETED
+                            tool_info.result = message.content
 
-                        # Remove from active tools
-                        del self.active_tools[tool_id]
+                            # Update existing tool message with result
+                            self._update_tool_result_message(tool_info)
+
+                            # Remove from active tools
+                            del self.active_tools[tool_id]
+
+                # Update display after processing all messages
+                self._update_streaming_display()
 
             # Handle artifacts
             if "artifacts" in chunk and chunk["artifacts"]:
@@ -304,6 +320,8 @@ class AsyncStreamingHandler:
         self.streaming_messages.clear()
         self.tool_message_indices.clear()
         self.all_tool_executions.clear()
+        self.processed_tool_call_ids.clear()
+        self.processed_tool_result_ids.clear()
 
 
 def create_async_streaming_handler() -> AsyncStreamingHandler:
