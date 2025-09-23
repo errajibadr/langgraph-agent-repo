@@ -7,11 +7,10 @@ user queries in an AI-OPS context.
 from operator import add
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
-from langgraph.graph import add_messages
-
 from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.base.states.context import BaseContext
+from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
+from langgraph.graph import add_messages
 
 
 async def main():
@@ -32,7 +31,7 @@ async def main():
     print("=== Clarify Agent Example ===")
 
     async for chunk in deep_search_graph.astream(
-        initial_state,
+        initial_state,  # type: ignore
         config=config,  # type: ignore
         context=context,  # type: ignore
         stream_mode="values",

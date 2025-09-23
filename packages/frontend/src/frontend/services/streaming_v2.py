@@ -12,9 +12,9 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 import streamlit as st
-from langchain_core.messages import AIMessage, ToolMessage
-
 from frontend.utils.formatting import beautify_tool_name
+from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.graph.state import CompiledStateGraph
 
 
 class ToolStatus(Enum):
@@ -305,10 +305,12 @@ class AsyncStreamingHandler:
         except Exception as e:
             st.error(f"Error processing chunk: {str(e)}")
 
-    async def stream_graph_async(self, graph, input_state, config, context):
+    async def stream_graph_async(
+        self, graph: CompiledStateGraph, input_state: Dict[str, Any], config: Dict[str, Any], context: Dict[str, Any]
+    ):
         """Stream graph execution asynchronously with real-time display."""
         try:
-            async for chunk in graph.astream(input_state, config=config, context=context, stream_mode="values"):
+            async for chunk in graph.astream(input_state, config=config, context=context, stream_mode="values"):  # type: ignore
                 self.process_chunk(chunk)
                 # Small delay to allow UI updates
                 await asyncio.sleep(0.1)
@@ -390,7 +392,9 @@ def create_async_streaming_handler() -> AsyncStreamingHandler:
     return handler
 
 
-def run_async_streaming(graph, input_state, config, context) -> Dict[str, Any]:
+def run_async_streaming(
+    graph: CompiledStateGraph, input_state: Dict[str, Any], config: Dict[str, Any], context: Dict[str, Any]
+) -> Dict[str, Any]:
     """Run async streaming in a synchronous Streamlit context with real-time display."""
     # Clear any existing streaming displays from previous interactions
     _clear_existing_streaming_displays()

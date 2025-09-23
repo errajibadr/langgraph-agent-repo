@@ -3,11 +3,10 @@
 import uuid
 
 import streamlit as st
-from langchain_core.messages import HumanMessage
-
 from frontend.services.streaming_v2 import run_async_streaming
 from frontend.types import CreativityLevel
 from frontend.utils.formatting import beautify_tool_name
+from langchain_core.messages import HumanMessage
 
 from .artifacts_display import render_artifacts
 from .configuration import render_example_configurations

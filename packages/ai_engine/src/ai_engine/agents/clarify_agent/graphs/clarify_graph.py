@@ -7,16 +7,15 @@ clarification workflows that help disambiguate user queries.
 from datetime import datetime
 from typing import Literal, Type
 
+from ai_engine.agents.base.utils import get_user_context
+from ai_engine.agents.clarify_agent.prompts.clarify_prompts import CLARIFY_AIOPS_PROMPT
+from ai_engine.agents.clarify_agent.states import ClarifyContext, ClarifyState, ClarifyWithUser
+from ai_engine.models.custom_chat_model import create_chat_model
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Command
-
-from ai_engine.agents.base.utils import get_user_context
-from ai_engine.agents.clarify_agent.prompts.clarify_prompts import CLARIFY_AIOPS_PROMPT
-from ai_engine.agents.clarify_agent.states import ClarifyContext, ClarifyState, ClarifyWithUser
-from ai_engine.models.custom_chat_model import create_chat_model
 
 
 def get_clarify_graph(
@@ -27,7 +26,7 @@ def get_clarify_graph(
     *,
     name: str | None = None,
     system_prompt: str | None = None,
-    enrich_query_enabled: bool = False,
+    research_brief: bool = False,
     max_rounds: int = 3,
     is_subgraph: bool = False,
     parent_next_node: str = "__end__",
@@ -80,14 +79,14 @@ def get_clarify_graph(
 
         command_config = {"goto": "__end__"}
         # Determine next step
-        goto: Literal["__end__", "enrich_query"]
-        if clarify_response.need_clarification and enrich_query_enabled:
-            goto = "enrich_query"
+        goto: Literal["__end__", "research_brief_node"]
+        if not clarify_response.need_clarification and research_brief:
+            goto = "research_brief_node"
         else:
             goto = "__end__"
 
         command_config["goto"] = goto
-        if is_subgraph:
+        if is_subgraph and goto == "__end__":
             command_config["graph"] = Command.PARENT
             command_config["goto"] = parent_next_node if not clarify_response.need_clarification else "__end__"
 
@@ -114,22 +113,17 @@ def get_clarify_graph(
         state_schema=state_schema, input_schema=input_schema, output_schema=output_schema, context_schema=context_schema
     )
 
+    async def research_brief_node(state: ClarifyState):
+        return {"messages": [AIMessage(content="Enriching query...")]}
+
     # Add nodes
-    graph.add_node("clarify", model_node)
-    graph.add_node("enrich_query", lambda state: {})
+    graph.add_node("clarification_node", model_node)
+    graph.add_node("research_brief_node", research_brief_node)
 
     # Add edges
-    graph.add_edge(START, "clarify")
-    graph.add_edge("enrich_query", END)
+    graph.add_edge(START, "clarification_node")
+    graph.add_edge("research_brief_node", END)
 
     # Compile and return
     compiled_graph = graph.compile(name=name or "ClarifyAgent", **kwargs)
     return compiled_graph
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    create_chat_model()

@@ -7,17 +7,16 @@ clarification workflows that help disambiguate user queries.
 from datetime import datetime
 from typing import Literal, Type, cast
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph
-from langgraph.pregel.main import asyncio
-
 from ai_engine.agents.aiops_deepsearch_agent.states import GlobalState
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.agents.aiops_supervisor_agent.states import SupervisorContext, SupervisorState
 from ai_engine.agents.base.states.context import BaseContext
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
 from ai_engine.utils.streaming_parser import create_console_parser
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.pregel.main import asyncio
 
 
 def get_deepsearch_graph(
@@ -53,7 +52,9 @@ def get_deepsearch_graph(
         state_schema=state_schema, input_schema=input_schema, output_schema=output_schema, context_schema=context_schema
     )
 
-    clarify = get_clarify_graph(name="ClarifyAgent", is_subgraph=True, parent_next_node="orchestrate")
+    clarify = get_clarify_graph(
+        name="ClarifyAgent", is_subgraph=True, parent_next_node="orchestrate", research_brief=True
+    )
     supervisor = get_supervisor_graph(name="SupervisorAgent")
 
     # Add nodes
@@ -101,4 +102,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    asyncio.run(main())
     asyncio.run(main())
