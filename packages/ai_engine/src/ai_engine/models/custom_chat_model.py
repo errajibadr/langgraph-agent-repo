@@ -57,10 +57,9 @@ def create_chat_model(provider: Union[str, ProviderType] | None = None, **kwargs
     if isinstance(provider, str):
         provider = ProviderType(provider.lower())
 
-    print(f"Provider: {provider}")
     # Get provider-specific settings
     provider_settings = ProviderFactory.get_provider_settings(provider)
-    print(f"Provider settings: {provider_settings}")
+    # print(f"Provider settings: {provider_settings.model_dump_json()}")
 
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     # Convert provider settings to dict and filter out None values

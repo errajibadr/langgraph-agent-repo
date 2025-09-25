@@ -2,10 +2,9 @@
 
 from typing import Optional
 
+from core.types import ProviderType
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from core.types import ProviderType
 
 
 class BaseProviderSettings(BaseSettings):
@@ -90,7 +89,7 @@ class ProviderFactory:
         if provider is None:
             # Read from environment with fallback to CUSTOM
             provider_str = os.getenv("LLM_PROVIDER", ProviderType.CUSTOM.value)
-            print(f"Detected Provider: {provider_str}")
+
             provider = ProviderType(provider_str)
 
         if provider not in ProviderFactory._provider_map:

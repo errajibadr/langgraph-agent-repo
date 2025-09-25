@@ -56,13 +56,12 @@ def get_clarify_graph(
         """
         context = runtime.context or {}
         runtime_prompt = runtime.context.get("clarify_system_prompt", "") if runtime.context else ""
-        model = runtime.context.get("model")
-        print(f"Model: {model}")
+        model = context.get("model")
         print(f"iteration: {state.get('current_round', 0)}")
         # Prepare template parameters with defaults
         params = {
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "user_context": get_user_context(context["user_id"]),
+            "user_context": get_user_context(context.get("user_id")),
             "clarification_round": state["current_round"],
             "max_rounds": state.get("max_rounds", max_rounds),
             "current_incidents_alerts": context.get("current_incidents_alerts", "No current incidents or alerts"),

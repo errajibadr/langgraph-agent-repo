@@ -5,7 +5,7 @@ clarification workflows that help disambiguate user queries.
 """
 
 from datetime import datetime
-from typing import Literal, Type, cast
+from typing import Callable, Literal, Type, cast
 
 from ai_engine.agents.aiops_deepsearch_agent.states import GlobalState
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
@@ -26,6 +26,7 @@ def get_deepsearch_graph(
     context_schema: Type[BaseContext] | None = BaseContext,
     *,
     name: str | None = None,
+    include_clarify: bool | Callable = True,
     system_prompt: str | None = None,
     max_iterations: int = 3,
     force_thinking: bool = False,
@@ -55,6 +56,8 @@ def get_deepsearch_graph(
     clarify = get_clarify_graph(
         name="ClarifyAgent", is_subgraph=True, parent_next_node="orchestrate", research_brief=True
     )
+    if not include_clarify:
+        clarify = lambda x: x
     supervisor = get_supervisor_graph(name="SupervisorAgent")
 
     # Add nodes
@@ -63,7 +66,7 @@ def get_deepsearch_graph(
 
     # Add edges
     graph.add_edge(START, "clarify")
-
+    graph.add_edge("clarify", "orchestrate")
     # Compile and return
     compiled_graph = graph.compile(name=name or "DeepSearchAgent", **kwargs)
     return compiled_graph
@@ -102,5 +105,14 @@ async def main():
 
 
 if __name__ == "__main__":
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
     asyncio.run(main())
     asyncio.run(main())

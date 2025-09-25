@@ -10,7 +10,7 @@ from typing import Annotated, TypedDict
 from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
 from ai_engine.agents.clarify_agent.states import ClarificationArtifact, ClarifyContext
-from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessageChunk, AnyMessage, BaseMessage, HumanMessage, ToolMessageChunk
 from langgraph.graph import add_messages
 
 
@@ -23,7 +23,7 @@ class InputState(TypedDict):
 async def main():
     """Example usage of the clarify agent."""
     # Create the clarify graph
-    deepsearch_graph = get_deepsearch_graph(name="deepsearch_agent")
+    deepsearch_graph = get_deepsearch_graph(name="deepsearch_agent", include_clarify=False)
 
     # Configuration with thread ID for conversation tracking
     config = {"configurable": {"thread_id": "example-thread-1"}}
@@ -34,20 +34,21 @@ async def main():
     # Stream the conversation
     print("=== Clarify Agent Example ===")
 
-    async for ns, data in deepsearch_graph.astream(
+    async for data in deepsearch_graph.astream(
         initial_state,
         config=config,  # type: ignore
         context={**context, "model": "openai/gpt-oss-20b"},  # type: ignore
-        stream_mode="messages",
-        subgraphs=True,
+        stream_mode="messages",  # , "values"],
+        # subgraphs=True,
     ):
-        print(f"ns: {ns}")
-        # print(f"data: {data}")
-        chunk, metadata = data
-        print(chunk)
-        if chunk.content:
-            print(chunk)
-            print(f"chunk: {chunk.content}")
+        
+        # print(f"mode: {mode}")
+        # # print(f"data: {data}")
+        # chunk, metadata = data
+        # print(chunk)
+        # if chunk.content:
+        #     print(chunk)
+        #     print(f"chunk: {chunk.content}")
         # node_name, state_update = next(iter(data.items()))
         # print(f"node_name: {node_name}")
         # print(f"state_update: {state_update}")

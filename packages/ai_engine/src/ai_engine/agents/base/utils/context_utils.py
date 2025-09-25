@@ -3,7 +3,7 @@
 from ai_engine.agents.base.states.context import UserContext
 
 
-def get_user_context(user_id: str) -> UserContext:
+def get_user_context(user_id: str | None = None) -> UserContext | None:
     """Get user context information by user ID.
 
     This is a placeholder implementation that returns mock data.
@@ -17,6 +17,8 @@ def get_user_context(user_id: str) -> UserContext:
         UserContext object with user information
     """
     # TODO: Replace with actual user context retrieval logic
+    if user_id is None:
+        return None
     return UserContext(
         user_id=user_id,
         user_name="John Doe",

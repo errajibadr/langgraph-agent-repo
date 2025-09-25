@@ -7,13 +7,6 @@ clarification workflows that help disambiguate user queries.
 from datetime import datetime
 from typing import Literal, Type, cast
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph
-from langgraph.pregel.main import asyncio
-from langgraph.runtime import Runtime
-from langgraph.types import Command
-
 from ai_engine.agents.aiops_supervisor_agent.prompts.supervisor_prompts import SUPERVISOR_AIOPS_PROMPT
 from ai_engine.agents.aiops_supervisor_agent.states import SupervisorContext, SupervisorState
 from ai_engine.agents.aiops_supervisor_agent.tools.agent_tools import call_inspector_agent, call_navigator_agent
@@ -21,6 +14,12 @@ from ai_engine.agents.base.utils import get_user_context
 from ai_engine.models.custom_chat_model import create_chat_model
 from ai_engine.tools.reflection_tool import think_tool
 from ai_engine.utils.streaming_parser import create_console_parser
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.pregel.main import asyncio
+from langgraph.runtime import Runtime
+from langgraph.types import Command
 
 supervisor_tools_list = {
     call_inspector_agent.name: call_inspector_agent,
@@ -167,7 +166,7 @@ def get_supervisor_graph(
 
         context = runtime.context or {}
         runtime_prompt = context.get("supervisor_system_prompt", "") if runtime.context else ""
-        user_id = context.get("user_id", None)
+        user_id = context.get("user_id")
         user_context = get_user_context(user_id)
         model = context.get("model", None)
         supervisor_model = create_chat_model(model=model).bind_tools(list(supervisor_tools_list.values()))
@@ -233,4 +232,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    asyncio.run(main())
+    asyncio.run(main())
+    asyncio.run(main())
     asyncio.run(main())
