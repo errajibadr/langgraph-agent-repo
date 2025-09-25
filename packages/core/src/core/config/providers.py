@@ -58,7 +58,9 @@ class GroqSettings(BaseProviderSettings):
         env_prefix="GROQ_", case_sensitive=False, extra="ignore", env_file=".env", env_file_encoding="utf-8"
     )
 
-    model: Optional[str] = Field(default="openai/gpt-oss-20b", description="Name of the model to use")
+    model: Optional[str] = Field(default="llama33-70b-instruct", description="Name of the model to use")
+    # llama33-70b-instruct
+    # openai/gpt-oss-20b
 
 
 class CustomProviderSettings(BaseProviderSettings):
