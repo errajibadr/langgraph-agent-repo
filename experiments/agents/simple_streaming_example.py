@@ -9,7 +9,7 @@ import asyncio
 
 from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
-from ai_engine.utils.channel_streaming import (
+from ai_engine.utils.channel_streaming_v2 import (
     ArtifactStreamEvent,
     ChannelConfig,
     ChannelStreamingProcessor,
