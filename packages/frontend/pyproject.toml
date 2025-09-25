@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Streamlit frontend for multi-provider LLM chat interface"
 readme = "README.md"
 authors = [
-    { name = "errajibadr", email = "errajibadr95@gmail.com" }
+    { name = "errajibadr"}
 ]
 requires-python = ">=3.12"
 dependencies = [
