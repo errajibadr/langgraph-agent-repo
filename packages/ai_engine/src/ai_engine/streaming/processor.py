@@ -14,7 +14,14 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from langchain_core.messages import AIMessage, BaseMessage
 
 from .config import ChannelConfig, TokenStreamingConfig
-from .events import ArtifactEvent, ChannelUpdateEvent, ChannelValueEvent, StreamEvent, TokenStreamEvent
+from .events import (
+    ArtifactEvent,
+    ChannelUpdateEvent,
+    ChannelValueEvent,
+    MessageReceivedEvent,
+    StreamEvent,
+    TokenStreamEvent,
+)
 from .tool_calls import ToolCallTracker
 
 logger = logging.getLogger(__name__)
@@ -127,19 +134,22 @@ class ChannelStreamingProcessor:
                 return namespace, mode, chunk
 
             # If first element is a Message, it's (message, metadata) from single "messages" mode
-            elif isinstance(first, BaseMessage):
+            if isinstance(first, BaseMessage):
                 chunk = (first, second)  # Keep as tuple for message processing
                 mode = "messages"
                 namespace = "main"
                 return namespace, mode, chunk
 
             # If first element is tuple (namespace), it's (namespace_tuple, chunk) for single mode
-            elif isinstance(first, tuple):
+            if isinstance(first, tuple):
                 namespace_tuple, chunk = first, second
                 namespace = self._format_namespace(namespace_tuple)
                 # Determine mode from stream_modes (should be single mode)
                 mode = stream_modes[0] if len(stream_modes) == 1 else "values"
                 return namespace, mode, chunk
+
+            # Fallback: treat as values in main
+            return "main", "values", second
 
         # Case 3: Single chunk (single mode, no subgraphs)
         else:
@@ -198,8 +208,14 @@ class ChannelStreamingProcessor:
             for event in tool_events:
                 yield event
 
+        # Mark message id as seen if present
+        if isinstance(message, AIMessage):
+            msg_id = getattr(message, "id", None)
+            if msg_id:
+                self._seen_message_ids.add(msg_id)
+
         # Handle regular content streaming
-        if isinstance(message, AIMessage) and hasattr(message, "content") and message.content:
+        if isinstance(message, AIMessage) and hasattr(message, "content") and message.content is not None:
             node_name, task_id = self._parse_namespace_components(namespace)
             accumulator_key = f"{namespace}:{task_id or 'default'}"
 
@@ -207,12 +223,13 @@ class ChannelStreamingProcessor:
             if accumulator_key not in self._message_accumulators:
                 self._message_accumulators[accumulator_key] = ""
 
-            self._message_accumulators[accumulator_key] += message.content
+            content_delta = message.content if isinstance(message.content, str) else str(message.content)
+            self._message_accumulators[accumulator_key] += content_delta
 
             # Generate token stream event
             yield TokenStreamEvent(
                 namespace=namespace,
-                content_delta=message.content,
+                content_delta=content_delta,
                 accumulated_content=self._message_accumulators[accumulator_key],
                 message_id=getattr(message, "id", None),
                 task_id=task_id,
@@ -247,6 +264,14 @@ class ChannelStreamingProcessor:
             if config.filter_fn and not config.filter_fn(current_value):
                 continue
 
+            # Check if this channel should parse messages
+            if config.parse_messages and self._is_message_channel_value(current_value):
+                async for event in self._process_message_channel_value(
+                    namespace, channel_key, current_value, previous_value
+                ):
+                    yield event
+                continue  # Skip regular channel processing
+
             # Calculate delta
             value_delta = self._calculate_delta(previous_value, current_value)
 
@@ -255,6 +280,8 @@ class ChannelStreamingProcessor:
 
             # Create appropriate event
             if config.artifact_type:
+                if not current_value:
+                    continue
                 yield ArtifactEvent(
                     namespace=namespace,
                     channel=channel_key,
@@ -295,6 +322,8 @@ class ChannelStreamingProcessor:
 
             # Create appropriate event
             if config.artifact_type:
+                if not update_value:
+                    continue
                 yield ArtifactEvent(
                     namespace=namespace,
                     channel=channel_key,
@@ -366,6 +395,74 @@ class ChannelStreamingProcessor:
         if self.tool_call_tracker:
             return self.tool_call_tracker.get_all_completed_calls()
         return []
+
+    # Message parsing helper methods
+
+    def _is_message_channel_value(self, value: Any) -> bool:
+        """Check if a channel value contains messages."""
+        if isinstance(value, list):
+            return len(value) > 0 and all(isinstance(item, BaseMessage) for item in value)
+        elif isinstance(value, BaseMessage):
+            return True
+        return False
+
+    async def _process_message_channel_value(
+        self, namespace: str, channel_key: str, current_value: Any, previous_value: Any
+    ) -> AsyncGenerator[MessageReceivedEvent, None]:
+        """Process channel values that contain messages with deduplication."""
+        from langchain_core.messages import ToolMessage
+
+        # Handle both list of messages and single message
+        if isinstance(current_value, list):
+            messages = current_value
+            prev_messages = previous_value if isinstance(previous_value, list) else []
+        else:
+            messages = [current_value]
+            prev_messages = [previous_value] if isinstance(previous_value, BaseMessage) else []
+
+        # Find new messages (delta)
+        new_messages = messages[len(prev_messages) :] if len(messages) > len(prev_messages) else []
+
+        # Process each new message
+        for msg in new_messages:
+            # Extract message metadata
+            msg_id = getattr(msg, "id", None)
+            has_tool_calls = hasattr(msg, "tool_calls") and bool(msg.tool_calls)
+            tool_call_ids = []
+
+            if has_tool_calls:
+                tool_call_ids = [tc.get("id", "") for tc in msg.tool_calls if tc.get("id")]
+
+            # Check if this message was already processed via token streaming
+            was_streamed = msg_id is not None and msg_id in self._seen_message_ids
+
+            # Add to seen messages if not already there
+            if msg_id and not was_streamed:
+                self._seen_message_ids.add(msg_id)
+
+            # Extract components
+            node_name, task_id = self._parse_namespace_components(namespace)
+
+            # Determine message type
+            message_type = ""
+            if isinstance(msg, AIMessage):
+                message_type = "ai"
+            elif isinstance(msg, ToolMessage):
+                message_type = "tool"
+            else:
+                message_type = msg.__class__.__name__.lower().replace("message", "")
+
+            # Emit MessageReceivedEvent
+            yield MessageReceivedEvent(
+                namespace=namespace,
+                message=msg,
+                was_streamed=was_streamed,
+                has_tool_calls=has_tool_calls,
+                tool_call_ids=tool_call_ids,
+                source="channel",
+                message_type=message_type,
+                task_id=task_id,
+            )
 
     def reset_state(self):
         """Reset all processor state."""

@@ -70,6 +70,27 @@ class ArtifactEvent(StreamEvent):
 
 
 @dataclass
+class MessageReceivedEvent(StreamEvent):
+    """Complete message received from channel with deduplication info.
+
+    This event is emitted when a complete message appears in a channel
+    (like "messages" state). It includes deduplication information to
+    indicate if this message was already processed via token streaming.
+    """
+
+    message: BaseMessage  # The complete message
+    was_streamed: bool  # True if already processed via token streaming
+    has_tool_calls: bool  # Whether message contains tool calls
+    tool_call_ids: list[str] = field(default_factory=list)  # Tool call IDs if present
+    source: str = field(default="channel")  # Source: "channel" vs "stream"
+    message_type: str = field(default="")  # "ai", "tool", "human", etc.
+
+    @property
+    def id(self) -> str:
+        return self.message.id or ""
+
+
+@dataclass
 class ToolCallStartedEvent(StreamEvent):
     """Tool call started - first message with complete metadata."""
 

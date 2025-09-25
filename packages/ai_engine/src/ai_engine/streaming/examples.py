@@ -7,21 +7,20 @@ not simulated data. Uses the supervisor graph for concrete examples.
 import asyncio
 from typing import Any, Dict
 
+from langchain_core.messages import HumanMessage
+
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
-from ai_engine.agents.aiops_supervisor_agent.states import SupervisorContext
 from ai_engine.streaming.config import ChannelConfig, StreamMode, TokenStreamingConfig
 from ai_engine.streaming.events import (
     ArtifactEvent,
-    ChannelUpdateEvent,
     ChannelValueEvent,
+    MessageReceivedEvent,
     TokenStreamEvent,
     ToolCallCompletedEvent,
     ToolCallProgressEvent,
     ToolCallStartedEvent,
 )
-from ai_engine.streaming.factories import create_multi_agent_processor, create_simple_processor
 from ai_engine.streaming.processor import ChannelStreamingProcessor
-from langchain_core.messages import HumanMessage
 
 
 async def real_supervisor_streaming_example():
@@ -31,7 +30,7 @@ async def real_supervisor_streaming_example():
 
     # Configure channels to monitor
     channels = [
-        ChannelConfig(key="messages", stream_mode=StreamMode.VALUES_ONLY),
+        ChannelConfig(key="messages", stream_mode=StreamMode.VALUES_ONLY, parse_messages=True),
         ChannelConfig(key="notes", artifact_type="Document"),
         ChannelConfig(key="raw_notes", artifact_type="RawResearch"),
     ]
@@ -116,6 +115,56 @@ async def real_supervisor_streaming_example():
     print("✅ Real supervisor streaming completed!")
 
 
+async def message_deduplication_demo():
+    """Demonstrate message parsing and deduplication."""
+    print("🎯 Message Deduplication Demo")
+    print("=" * 40)
+
+    # Configure with both token streaming AND message parsing
+    channels = [
+        ChannelConfig(key="messages", parse_messages=True),  # Parse messages with deduplication
+    ]
+
+    token_config = TokenStreamingConfig(
+        enabled_namespaces={"main"},  # Enable token streaming
+        include_tool_calls=False,
+    )
+
+    processor = ChannelStreamingProcessor(
+        channels=channels,
+        token_streaming=token_config,
+    )
+
+    graph = get_supervisor_graph(name="dedup_demo")
+
+    input_data = {"messages": [HumanMessage(content="Quick test for deduplication")]}
+
+    print("🔍 This demo shows:")
+    print("  1. Messages streamed token-by-token → TokenStreamEvent")
+    print("  2. Same messages in channels → MessageReceivedEvent(was_streamed=True)")
+    print("  3. ToolMessages only in channels → MessageReceivedEvent(was_streamed=False)")
+    print()
+
+    token_events = 0
+    message_events = 0
+
+    async for event in processor.stream(graph, input_data):
+        if isinstance(event, TokenStreamEvent):
+            token_events += 1
+
+            print(f"'{event.content_delta}", end="| ")
+
+        elif isinstance(event, MessageReceivedEvent):
+            message_events += 1
+            status = "🔄 DUPLICATE" if event.was_streamed else "🆕 NEW"
+            print(
+                f"\n💬 {status} {event.message_type}: {event.message.content[:50]}... (id: {getattr(event.message, 'id', None)})"
+            )
+    print(processor._seen_message_ids)
+    print(f"\n📊 Result: {token_events} token events, {message_events} message events")
+    print("✅ Deduplication demo completed!")
+
+
 async def main():
     """Run all real streaming examples."""
     print("🚀 Real Streaming Examples with Supervisor Graph")
@@ -129,6 +178,7 @@ async def main():
 
         # Run examples
         await real_supervisor_streaming_example()
+        # await message_deduplication_demo()
 
         print("\n" + "=" * 55)
         print("✅ All real streaming examples completed successfully!")
@@ -146,19 +196,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
-    ###
     ###

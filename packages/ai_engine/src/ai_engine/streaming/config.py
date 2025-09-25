@@ -30,6 +30,7 @@ class ChannelConfig:
     stream_mode: StreamMode = StreamMode.VALUES_ONLY  # How to stream this channel
     artifact_type: Optional[str] = None  # Map to artifact type for UI display
     filter_fn: Optional[Callable[[Any], bool]] = None  # Custom filter for values
+    parse_messages: bool = False  # Parse channel content as messages with deduplication
 
     def __post_init__(self):
         """Validate configuration."""
