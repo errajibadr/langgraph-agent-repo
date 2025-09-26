@@ -171,7 +171,9 @@ class ToolCallTracker:
         for i, tool_call in enumerate(message.tool_calls):
             if tool_call.get("id") and tool_call.get("name"):
                 # This is a first message with complete metadata
-                events.append(self._initialize_tool_call(message.id, i, tool_call, namespace, task_id))
+                index = message.additional_kwargs.get("tool_calls", [])[i].get("index", i)
+                events.append(self._initialize_tool_call(message.id, index, tool_call, namespace, task_id))
+        print(f"initialized tool calls {len(events)}")
 
         for chunk in message.tool_call_chunks:
             if chunk["args"]:  # Only process chunks with argument content
@@ -202,9 +204,7 @@ class ToolCallTracker:
                 # Skip incomplete entries
                 logger.warning("Skipping tool call without id or name in full message processing")
                 continue
-
-            did_exist = True if self._id_to_state.get(tool_call_id) else False
-
+            old_state = self._id_to_state.get(tool_call_id)
             # Parse args if needed
             parsed_args: Optional[Dict[str, Any]] = None
             accumulated_args: str = ""
@@ -221,10 +221,12 @@ class ToolCallTracker:
                 accumulated_args=accumulated_args,
                 parsed_args=parsed_args,
                 status=ToolCallStatus.COMPLETED if parsed_args is not None else ToolCallStatus.ERROR,
+                result_status=old_state.result_status if old_state else None,
+                result=old_state.result if old_state else None,
             )
             self._id_to_state[tool_call_id] = state
-            if did_exist:
-                logger.warning(f"Tool call {tool_call_id} already exists in state")
+            if old_state and old_state.status in [ToolCallStatus.COMPLETED, ToolCallStatus.ERROR]:
+                logger.debug(f"Tool call {tool_call_id} already exists in Completed state; we skip emitting")
                 continue
 
             self._completed_calls.append(state)
@@ -283,8 +285,9 @@ class ToolCallTracker:
 
         state.result = result_payload
         state.result_status = message.status
+        self._id_to_state[tool_call_id] = state
 
-        status: str = "result_success" if getattr(message, "status", "success") == "success" else "result_error"
+        status: str = "result_success" if message.status == "success" else "result_error"
 
         events.append(
             ToolCallEvent(
@@ -387,6 +390,12 @@ class ToolCallTracker:
     def get_completed_calls(self) -> List[ToolCallState]:
         """Get completed calls from current iteration."""
         return self._completed_calls.copy()
+
+    def get_completed_calls_by_tool_call_id(self) -> set[str]:
+        """Get completed calls by ID."""
+        return {state.tool_call_id for state in self._completed_calls} | {
+            str(call["id"]) for call in self._call_history
+        }
 
     def get_all_completed_calls(self) -> List[Dict[str, Any]]:
         """Get all completed tool calls with history."""

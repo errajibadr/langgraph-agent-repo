@@ -221,21 +221,20 @@ class ChannelStreamingProcessor:
             )
             return
 
-        is_tc = isinstance(message, AIMessageChunk) and (message.tool_calls or message.tool_call_chunks)
-        is_tc_result = isinstance(message, ToolMessageChunk) or isinstance(message, ToolMessage)
-
         msg_id = getattr(message, "id", None)
         if msg_id:
             self._seen_message_ids.add(msg_id)
 
         # if message is a tool call and tool call token by token streaming is enabled
         if self.token_streaming.include_tool_calls:
-            if is_tc:
+            if isinstance(message, AIMessageChunk) and (
+                message.tool_calls or message.tool_call_chunks
+            ):  # is a tool call
                 node_name, task_id = self._parse_namespace_components(namespace)
                 tool_events = self.tool_call_tracker.process_stream_tool_calls(message, namespace, task_id)  # type: ignore
                 for event in tool_events:
                     yield event
-            if is_tc_result:
+            if isinstance(message, ToolMessageChunk) or isinstance(message, ToolMessage):  # tc_result
                 # Tool Message = tool_call_id and content
                 node_name, task_id = self._parse_namespace_components(namespace)
                 tool_events = self.tool_call_tracker.process_tool_call_result(message, namespace, task_id)  # type: ignore

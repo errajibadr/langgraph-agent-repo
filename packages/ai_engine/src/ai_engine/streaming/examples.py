@@ -5,9 +5,8 @@ not simulated data. Uses the supervisor graph for concrete examples.
 """
 
 import asyncio
-from tkinter import FALSE
-from typing import Any, Dict
 
+from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.streaming.config import ChannelConfig, StreamMode, TokenStreamingConfig
 from ai_engine.streaming.events import ArtifactEvent, MessageReceivedEvent, TokenStreamEvent, ToolCallEvent
@@ -29,7 +28,7 @@ async def real_supervisor_streaming_example():
 
     # Configure token streaming with tool calls
     token_config = TokenStreamingConfig(
-        enabled_namespaces={"main"},
+        enabled_namespaces={"main", "orchestrate"},
         include_tool_calls=True,
         # enabled_namespaces={"main", "orchestrate", "orchestrator_tools"}, include_tool_calls=False
     )
@@ -42,10 +41,18 @@ async def real_supervisor_streaming_example():
     )
 
     # Get real supervisor graph
-    graph = get_supervisor_graph(name="streaming_supervisor_demo")
+    # graph = get_supervisor_graph(name="streaming_supervisor_demo")
+    graph = get_deepsearch_graph(name="streaming_deepsearch_demo", include_clarify=False)
 
     # Real input
-    input_data = {"messages": [HumanMessage(content="What's going on with my App Langgraph Platform? it lags.")]}
+    input_data = {
+        "messages": [
+            HumanMessage(
+                content="What's going on with my App Langgraph Platform? it lags. Call both of you agents at the same time!"
+            )
+        ]
+    }
+
     config = {"configurable": {"thread_id": "supervisor_streaming_demo"}}
     context = {"user_id": "demo_user"}
 
@@ -85,7 +92,7 @@ async def real_supervisor_streaming_example():
                 print(f"\n🔧 [{event.namespace}] Started Tool call #{tool_calls_seen}: {event.tool_name}")
             if event.status == "args_streaming":
                 if event.args_delta.strip():
-                    print(f"\n⚙️  [{event.namespace}] Tool args: {event.args_delta[:50]}...")
+                    print(f"\n ⚙️ [{event.namespace}] Tool args: {event.args_delta[:50]}...")
             if event.status == "args_ready":
                 print(f"🏗️ Tool Call Construction Complete \n[{event.namespace}] Tool completed: {event.tool_name}")
                 print(f"    Args: {event.args}")
@@ -184,6 +191,16 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
     ###
     ###
     ###
