@@ -16,7 +16,7 @@ from ai_engine.tools.reflection_tool import think_tool
 from ai_engine.utils.streaming_parser import create_console_parser
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph.state import CompiledStateGraph, RunnableConfig
 from langgraph.pregel.main import asyncio
 from langgraph.runtime import Runtime
 from langgraph.types import Command
@@ -157,7 +157,7 @@ def get_supervisor_graph(
         Compiled state graph for clarification workflow
     """
 
-    async def model_node(state: SupervisorState, runtime: Runtime[SupervisorContext]):
+    async def model_node(state: SupervisorState, runtime: Runtime[SupervisorContext], config: RunnableConfig):
         """Main clarification node that processes user queries.
 
         This node uses an LLM to determine if clarification is needed
@@ -177,7 +177,9 @@ def get_supervisor_graph(
 
         prompt_template = runtime_prompt or system_prompt or SUPERVISOR_AIOPS_PROMPT.format(**params)
         system_message = SystemMessage(content=prompt_template)
-        supervisor_response = await supervisor_model.ainvoke([system_message] + state.get("messages", []))
+        supervisor_response = await supervisor_model.ainvoke(
+            [system_message] + state.get("messages", []), config=config
+        )
 
         return {"messages": [supervisor_response]}
 
@@ -233,6 +235,18 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
     ##
     ##
     ##

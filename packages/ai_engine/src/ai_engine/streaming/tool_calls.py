@@ -15,20 +15,34 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    ToolCall,
+    ToolCallChunk,
+    ToolMessage,
+    ToolMessageChunk,
+)
+from pydantic.v1.typing import AnyCallable
 
-from .events import ToolCallCompletedEvent, ToolCallErrorEvent, ToolCallProgressEvent, ToolCallStartedEvent
+from .events import ToolCallEvent
 
 logger = logging.getLogger(__name__)
 
 
 class ToolCallStatus(Enum):
-    """Status of a streaming tool call."""
+    """Status of a streaming tool call.
+
+    NOTE: COMPLETED refers to argument streaming completion (JSON parsed),
+    not the final tool execution result. Tool execution results are tracked
+    via separate ToolCallEvent statuses (result_received/result_error).
+    """
 
     INITIALIZING = "initializing"  # First message received
     STREAMING = "streaming"  # Accumulating argument chunks
-    COMPLETED = "completed"  # Successfully parsed final JSON
-    ERROR = "error"  # Failed to parse or other error
+    COMPLETED = "completed"  # Successfully parsed final JSON (args complete)
+    ERROR = "error"  # Failed to parse or other error while streaming args
 
 
 @dataclass
@@ -46,6 +60,10 @@ class ToolCallState:
     parsed_args: Optional[Dict[str, Any]] = None  # Final parsed arguments
     status: ToolCallStatus = ToolCallStatus.INITIALIZING
     error_message: Optional[str] = None
+
+    # Result state (from ToolMessage[Chunk])
+    result: Optional[Dict[str, Any]] = None
+    result_status: Optional[str] = None  # "success" | "error"
 
     def add_args_chunk(self, args_chunk: str) -> bool:
         """Add an argument chunk and try to parse.
@@ -123,7 +141,12 @@ class ToolCallTracker:
         # Current iteration counter
         self._current_iteration: int = 0
 
-    def process_message(self, message: AIMessage, namespace: str, task_id: Optional[str] = None) -> List[Any]:
+        # Map tool_call_id -> ToolCallState for quick lookup on results
+        self._id_to_state: Dict[str, ToolCallState] = {}
+
+    def process_stream_tool_calls(
+        self, message: AIMessageChunk, namespace: str, task_id: Optional[str] = None
+    ) -> List[Any]:
         """Process a message and return generated events.
 
         Args:
@@ -136,35 +159,81 @@ class ToolCallTracker:
         """
         events = []
 
-        # Check for tool call initialization (first message with complete metadata)
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            for i, tool_call in enumerate(message.tool_calls):
-                if tool_call.get("id") and tool_call.get("name"):
-                    # This is a first message with complete metadata
-                    events.extend(self._initialize_tool_call(message, i, tool_call, namespace, task_id))
+        if not message.id:
+            logger.warning("Missing Message ID for tool call processing")
+            logger.debug(f"Message: {message.pretty_repr()}")
+            return events
 
-        # Check for tool call chunks (subsequent messages)
-        if hasattr(message, "tool_call_chunks") and message.tool_call_chunks:
-            for chunk in message.tool_call_chunks:
-                if chunk.get("args"):  # Only process chunks with argument content
-                    events.extend(self._process_tool_call_chunk(message, chunk, namespace, task_id))
+        if not message.tool_calls and not message.tool_call_chunks:
+            return events
+
+        # Check for tool call initialization (first message with complete metadata)
+        for i, tool_call in enumerate(message.tool_calls):
+            if tool_call.get("id") and tool_call.get("name"):
+                # This is a first message with complete metadata
+                events.append(self._initialize_tool_call(message.id, i, tool_call, namespace, task_id))
+
+        for chunk in message.tool_call_chunks:
+            if chunk["args"]:  # Only process chunks with argument content
+                events.extend(self._process_tool_call_chunk(message.id, chunk, namespace, task_id))
+
+        return events
+
+    def process_tool_call_result(
+        self, message: ToolMessageChunk | ToolMessage, namespace: str, task_id: Optional[str] = None
+    ) -> List[ToolCallEvent]:
+        """Process a tool call result message and return generated events."""
+        events: List[ToolCallEvent] = []
+
+        tool_call_id = message.tool_call_id
+        if not tool_call_id:
+            return events
+
+        state = self._id_to_state.get(tool_call_id)
+        if not state:
+            logger.warning(f"Received tool result for unknown tool_call_id={tool_call_id}")
+            return events
+
+        # Build result payload
+        result_payload: Dict[str, Any] = {
+            "content": getattr(message, "content", None),
+            "artifact": getattr(message, "artifact", None),
+            "status": getattr(message, "status", None),
+            "response_metadata": getattr(message, "response_metadata", {}),
+        }
+
+        state.result = result_payload
+        state.result_status = getattr(message, "status", None)
+
+        status: str = "result_received" if getattr(message, "status", "success") == "success" else "result_error"
+
+        events.append(
+            ToolCallEvent(
+                tool_name=state.tool_name,
+                namespace=namespace,
+                task_id=task_id or "",
+                tool_call_id=state.tool_call_id,
+                message_id=getattr(message, "id", None) or state.message_id,
+                index=state.index,
+                status=status,  # "result_received" | "result_error"
+                args=state.parsed_args,
+                result=result_payload,
+                error=str(getattr(message, "content", "")) if status == "result_error" else None,
+            )
+        )
 
         return events
 
     def _initialize_tool_call(
-        self, message: AIMessage, index: int, tool_call: Dict[str, Any], namespace: str, task_id: Optional[str]
-    ) -> List[ToolCallStartedEvent]:
+        self, message_id: str, index: int, tool_call: ToolCall, namespace: str, task_id: Optional[str]
+    ) -> ToolCallEvent:
         """Initialize a tool call from first message with complete metadata."""
-        message_id = getattr(message, "id", "")
-        if not message_id:
-            logger.warning("Message missing ID for tool call initialization")
-            return []
 
         key = (message_id, index)
 
         # Create tool call state
         state = ToolCallState(
-            tool_call_id=tool_call["id"],
+            tool_call_id=tool_call["id"],  # type: ignore -> we do the check before
             tool_name=tool_call["name"],
             message_id=message_id,
             index=index,
@@ -172,97 +241,65 @@ class ToolCallTracker:
         )
 
         self._active_calls[key] = state
+        self._id_to_state[state.tool_call_id] = state
 
         logger.debug(f"Initialized tool call {tool_call['id']} at ({message_id}, {index})")
 
-        # Generate started event
-        return [
-            ToolCallStartedEvent(
-                namespace=namespace,
-                tool_call_id=tool_call["id"],
-                tool_name=tool_call["name"],
-                index=index,
-                message_id=message_id,
-                task_id=task_id,
-            )
-        ]
+        return ToolCallEvent(
+            tool_name=tool_call["name"],
+            namespace=namespace,
+            task_id=task_id or "",
+            tool_call_id=state.tool_call_id,  # type: ignore : we do the check before
+            message_id=state.message_id,
+            index=state.index,
+            status="started_streaming",
+        )
 
     def _process_tool_call_chunk(
-        self, message: BaseMessage, chunk: Dict[str, Any], namespace: str, task_id: Optional[str]
-    ) -> List[Any]:
+        self, message_id: str, chunk: ToolCallChunk, namespace: str, task_id: Optional[str]
+    ) -> list[ToolCallEvent]:
         """Process a tool call argument chunk."""
-        message_id = getattr(message, "id", "")
-        if not message_id:
-            logger.warning("Message missing ID for tool call chunk")
-            return []
 
-        index = chunk.get("index", 0)
+        index = chunk["index"] or 0
         key = (message_id, index)
 
         # Find the corresponding active call
         if key not in self._active_calls:
-            logger.warning(f"No active tool call found for ({message_id}, {index})")
+            if chunk["id"] not in self._completed_calls:
+                logger.warning(f"No active tool call for {chunk['id']} found in ({message_id}, {index})")
+            else:
+                logger.warning(f"Tool call {chunk['id']} already completed in ({message_id}, {index})")
             return []
 
         state = self._active_calls[key]
-        args_chunk = chunk.get("args", "")
+
+        args_chunk = chunk["args"] or ""
 
         # Add the chunk and check if complete
         is_complete = state.add_args_chunk(args_chunk)
 
-        events = []
-
-        # Generate progress event
-        events.append(
-            ToolCallProgressEvent(
-                namespace=namespace,
-                tool_call_id=state.tool_call_id,
-                args_delta=args_chunk,
-                accumulated_args=state.accumulated_args,
-                is_valid_json=state.parsed_args is not None,
-                index=index,
-                message_id=message_id,
-                task_id=task_id,
-            )
-        )
-
         # If complete, generate completion event and move to completed
         if is_complete:
             if state.status == ToolCallStatus.COMPLETED:
-                events.append(
-                    ToolCallCompletedEvent(
-                        namespace=namespace,
-                        tool_call_id=state.tool_call_id,
-                        tool_name=state.tool_name,
-                        final_args=state.accumulated_args,
-                        parsed_args=state.parsed_args,
-                        index=index,
-                        message_id=message_id,
-                        task_id=task_id,
-                    )
-                )
-
-                # Move to completed
                 self._completed_calls.append(state)
-
-            elif state.status == ToolCallStatus.ERROR:
-                events.append(
-                    ToolCallErrorEvent(
-                        namespace=namespace,
-                        tool_call_id=state.tool_call_id,
-                        tool_name=state.tool_name,
-                        error_message=state.error_message or "JSON parsing failed",
-                        accumulated_args=state.accumulated_args,
-                        index=index,
-                        message_id=message_id,
-                        task_id=task_id,
-                    )
-                )
-
-            # Remove from active calls
+            # Remove from active calls (keep id->state mapping for result linking)
             del self._active_calls[key]
 
-        return events
+        # Generate progress event
+        return [
+            ToolCallEvent(
+                namespace=namespace,
+                task_id=task_id,
+                message_id=message_id,
+                index=index,
+                tool_call_id=state.tool_call_id,
+                tool_name=state.tool_name,
+                args_delta=args_chunk,
+                args_accumulated=state.accumulated_args,
+                status="args_streaming" if not is_complete else "completed_streaming",
+                args=state.parsed_args,
+            )
+        ]
 
     def get_active_calls(self) -> Dict[Tuple[str, int], ToolCallState]:
         """Get currently active (streaming) tool calls."""
@@ -316,4 +353,6 @@ class ToolCallTracker:
         self._completed_calls.clear()
         self._call_history.clear()
         self._seen_message_ids.clear()
+        self._id_to_state.clear()
         self._current_iteration = 0
+        #

@@ -7,8 +7,6 @@ not simulated data. Uses the supervisor graph for concrete examples.
 import asyncio
 from typing import Any, Dict
 
-from langchain_core.messages import HumanMessage
-
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.streaming.config import ChannelConfig, StreamMode, TokenStreamingConfig
 from ai_engine.streaming.events import (
@@ -16,11 +14,10 @@ from ai_engine.streaming.events import (
     ChannelValueEvent,
     MessageReceivedEvent,
     TokenStreamEvent,
-    ToolCallCompletedEvent,
-    ToolCallProgressEvent,
-    ToolCallStartedEvent,
+    ToolCallEvent,
 )
 from ai_engine.streaming.processor import ChannelStreamingProcessor
+from langchain_core.messages import HumanMessage
 
 
 async def real_supervisor_streaming_example():
@@ -30,14 +27,14 @@ async def real_supervisor_streaming_example():
 
     # Configure channels to monitor
     channels = [
-        ChannelConfig(key="messages", stream_mode=StreamMode.VALUES_ONLY, parse_messages=True),
+        ChannelConfig(key="messages", stream_mode=StreamMode.UPDATES_ONLY, parse_messages=True),
         ChannelConfig(key="notes", artifact_type="Document"),
         ChannelConfig(key="raw_notes", artifact_type="RawResearch"),
     ]
 
     # Configure token streaming with tool calls
     token_config = TokenStreamingConfig(
-        enabled_namespaces={"main", "orchestrate", "orchestrator_tools"}, include_tool_calls=False
+        enabled_namespaces={"main", "orchestrate", "orchestrator_tools"}, include_tool_calls=True
     )
 
     # Create processor
@@ -51,13 +48,7 @@ async def real_supervisor_streaming_example():
     graph = get_supervisor_graph(name="streaming_supervisor_demo")
 
     # Real input
-    input_data = {
-        "messages": [
-            HumanMessage(
-                content="What's going on with my App Langgraph Platform? it lags. Can you think of a plan very long and detailed first and then act by using the 'think' tool?"
-            )
-        ]
-    }
+    input_data = {"messages": [HumanMessage(content="What's going on with my App Langgraph Platform? it lags.")]}
     config = {"configurable": {"thread_id": "supervisor_streaming_demo"}}
     context = {"user_id": "demo_user"}
 
@@ -95,17 +86,20 @@ async def real_supervisor_streaming_example():
             print(f"\n📄 [{event.namespace}] {action} {event.artifact_type}")
             print(f"    From channel '{event.channel}': {str(event.artifact_data)[:80]}...")
 
-        elif isinstance(event, ToolCallStartedEvent):
-            tool_calls_seen += 1
-            print(f"\n🔧 [{event.namespace}] Tool call #{tool_calls_seen}: {event.tool_name}")
-
-        elif isinstance(event, ToolCallProgressEvent):
-            if event.args_delta.strip():
-                print(f"\n⚙️  [{event.namespace}] Tool args: {event.args_delta[:50]}...")
-
-        elif isinstance(event, ToolCallCompletedEvent):
-            print(f"\n✅ [{event.namespace}] Tool completed: {event.tool_name}")
-            print(f"    Args: {event.parsed_args}")
+        elif isinstance(event, ToolCallEvent):
+            if event.status == "started_streaming":
+                tool_calls_seen += 1
+                print(f"\n🔧 [{event.namespace}] Started Tool call #{tool_calls_seen}: {event.tool_name}")
+            if event.status == "args_streaming":
+                if event.args_delta.strip():
+                    print(f"\n⚙️  [{event.namespace}] Tool args: {event.args_delta[:50]}...")
+            if event.status == "completed_streaming":
+                print(f"\n✅ [{event.namespace}] Tool completed: {event.tool_name}")
+                print(f"    Args: {event.args}")
+            if event.status == "result_received":
+                print(f"\n✅ [{event.namespace}] Tool result: {event.result}")
+            if event.status == "result_error":
+                print(f"\n❌ [{event.namespace}] Tool error: {event.error}")
 
     print(f"\n\n📈 Streaming Summary:")
     print(f"   🎯 Tokens streamed: {token_count}")
@@ -196,4 +190,18 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
     ###

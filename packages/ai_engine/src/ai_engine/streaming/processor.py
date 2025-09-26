@@ -9,9 +9,11 @@ Integrates and improves the functionality from utils/channel_streaming_v2.py.
 """
 
 import logging
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages.ai import AIMessage, AIMessageChunk
+from langchain_core.messages.base import BaseMessage
+from langchain_core.messages.tool import ToolMessage, ToolMessageChunk
 
 from .config import ChannelConfig, TokenStreamingConfig
 from .events import (
@@ -54,12 +56,17 @@ class ChannelStreamingProcessor:
         self.prefer_updates = prefer_updates
 
         # Initialize tool call tracker if enabled
-        self.tool_call_tracker = ToolCallTracker() if self.token_streaming.include_tool_calls else None
+        self.tool_call_tracker = ToolCallTracker()
 
         # State tracking
         self._previous_state: Dict[str, Any] = {}  # namespace:channel -> previous_value
         self._message_accumulators: Dict[str, str] = {}  # namespace:task_id -> accumulated content
         self._seen_message_ids: set[str] = set()
+
+    @property
+    def default_stream_mode(self) -> Literal["updates", "values"]:
+        """Default stream mode. update or values depending on prefer_updates"""
+        return "updates" if not self.prefer_updates else "values"
 
     async def stream(
         self, graph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
@@ -100,7 +107,7 @@ class ChannelStreamingProcessor:
 
         # Always need values or updates for channel monitoring
         if self.channels:
-            modes.add("updates" if self.prefer_updates else "values")
+            modes.add(self.default_stream_mode)
 
         # Add messages mode if token streaming is enabled
         if self.token_streaming.enabled_namespaces:
@@ -108,7 +115,7 @@ class ChannelStreamingProcessor:
 
         return list(modes)
 
-    def _parse_raw_output(self, raw_output, stream_modes: List[str]) -> tuple[str, str, Any]:
+    def _parse_raw_output(self, raw_output, stream_modes: List[str]) -> tuple[str, str, Dict | tuple]:
         """Parse raw LangGraph output into (namespace, mode, chunk).
 
         Handles all LangGraph streaming output formats:
@@ -145,16 +152,16 @@ class ChannelStreamingProcessor:
                 namespace_tuple, chunk = first, second
                 namespace = self._format_namespace(namespace_tuple)
                 # Determine mode from stream_modes (should be single mode)
-                mode = stream_modes[0] if len(stream_modes) == 1 else "values"
+                mode = stream_modes[0] if len(stream_modes) == 1 else self.default_stream_mode
                 return namespace, mode, chunk
 
             # Fallback: treat as values in main
-            return "main", "values", second
+            return "main", self.default_stream_mode, second
 
         # Case 3: Single chunk (single mode, no subgraphs)
         else:
             chunk = raw_output
-            mode = stream_modes[0] if len(stream_modes) == 1 else "values"
+            mode = stream_modes[0] if len(stream_modes) == 1 else self.default_stream_mode
             namespace = "main"
             return namespace, mode, chunk
 
@@ -187,7 +194,9 @@ class ChannelStreamingProcessor:
             async for event in self._process_channel_updates(namespace, chunk):
                 yield event
 
-    async def _process_token_chunk(self, namespace: str, chunk: tuple) -> AsyncGenerator[StreamEvent, None]:
+    async def _process_token_chunk(
+        self, namespace: str, chunk: tuple[BaseMessage, Dict[str, Any]]
+    ) -> AsyncGenerator[StreamEvent, None]:
         """Process message chunks for token-by-token streaming."""
         message, metadata = chunk
 
@@ -201,21 +210,35 @@ class ChannelStreamingProcessor:
             if not message_tags.intersection(self.token_streaming.message_tags):
                 return
 
-        # Process tool calls first if enabled
-        if self.tool_call_tracker and isinstance(message, AIMessage):
-            node_name, task_id = self._parse_namespace_components(namespace)
-            tool_events = self.tool_call_tracker.process_message(message, namespace, task_id)
-            for event in tool_events:
-                yield event
+        if not isinstance(message, AIMessageChunk) and not isinstance(message, ToolMessage):
+            logger.warning(
+                f"Expected either AIMessageChunk(or any Chunk Subclass) or ToolMessage, got {type(message)}; Skipping token streaming"
+            )
+            return
 
-        # Mark message id as seen if present
-        if isinstance(message, AIMessage):
-            msg_id = getattr(message, "id", None)
-            if msg_id:
-                self._seen_message_ids.add(msg_id)
+        is_tc = isinstance(message, AIMessageChunk) and (message.tool_calls or message.tool_call_chunks)
+        is_tc_result = isinstance(message, ToolMessageChunk) or isinstance(message, ToolMessage)
 
-        # Handle regular content streaming
-        if isinstance(message, AIMessage) and hasattr(message, "content") and message.content is not None:
+        msg_id = getattr(message, "id", None)
+        if msg_id:
+            self._seen_message_ids.add(msg_id)
+
+        # if message is a tool call and tool call token by token streaming is enabled
+        if self.token_streaming.include_tool_calls:
+            if is_tc:
+                node_name, task_id = self._parse_namespace_components(namespace)
+                tool_events = self.tool_call_tracker.process_stream_tool_calls(message, namespace, task_id)  # type: ignore
+                for event in tool_events:
+                    yield event
+            if is_tc_result:
+                # Tool Message = tool_call_id and content
+                node_name, task_id = self._parse_namespace_components(namespace)
+                tool_events = self.tool_call_tracker.process_tool_call_result(message, namespace, task_id)  # type: ignore
+                for event in tool_events:
+                    yield event
+
+        # Handle regular content streaming for AIMessageChunk only
+        if isinstance(message, AIMessageChunk) and hasattr(message, "content") and message.content is not None:
             node_name, task_id = self._parse_namespace_components(namespace)
             accumulator_key = f"{namespace}:{task_id or 'default'}"
 
@@ -344,6 +367,7 @@ class ChannelStreamingProcessor:
 
     def _parse_namespace_components(self, namespace: str) -> tuple[str, Optional[str]]:
         """Parse namespace to extract node_name and task_id."""
+        # TODO: review this namespace definition
         if namespace == "main":
             return "main", None
 
@@ -410,7 +434,7 @@ class ChannelStreamingProcessor:
         self, namespace: str, channel_key: str, current_value: Any, previous_value: Any
     ) -> AsyncGenerator[MessageReceivedEvent, None]:
         """Process channel values that contain messages with deduplication."""
-        from langchain_core.messages import ToolMessage
+        from langchain_core.messages import ToolMessage, ToolMessageChunk
 
         # Handle both list of messages and single message
         if isinstance(current_value, list):

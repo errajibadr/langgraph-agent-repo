@@ -9,7 +9,7 @@ All event types for the streaming system, including:
 
 import asyncio
 from dataclasses import KW_ONLY, dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from langchain_core.messages import BaseMessage
 
@@ -91,7 +91,32 @@ class MessageReceivedEvent(StreamEvent):
 
 
 @dataclass
-class ToolCallStartedEvent(StreamEvent):
+class ToolCallEvent:
+    """Tool call lifecycle events."""
+
+    tool_name: str
+    namespace: str
+    task_id: str | None
+    tool_call_id: str
+    message_id: str
+    index: int
+    status: Literal[
+        "started_streaming",
+        "args_streaming",
+        "completed_streaming",
+        "error_streaming",
+        "result_received",
+        "result_error",
+    ]
+    args: dict[str, Any] | None = None  # Tool call arguments
+    args_delta: str = field(default="")
+    args_accumulated: str = field(default="")
+    result: Optional[Any] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class ToolCallStartedStreamEvent(StreamEvent):
     """Tool call started - first message with complete metadata."""
 
     tool_call_id: str  # From first message
@@ -101,7 +126,7 @@ class ToolCallStartedEvent(StreamEvent):
 
 
 @dataclass
-class ToolCallProgressEvent(StreamEvent):
+class ToolCallProgressStreamEvent(StreamEvent):
     """Tool call argument streaming progress."""
 
     tool_call_id: str  # Tool call identifier
@@ -113,7 +138,7 @@ class ToolCallProgressEvent(StreamEvent):
 
 
 @dataclass
-class ToolCallCompletedEvent(StreamEvent):
+class ToolCallCompletedStreamEvent(StreamEvent):
     """Tool call completed with final parsed arguments."""
 
     tool_call_id: str  # Tool call identifier
