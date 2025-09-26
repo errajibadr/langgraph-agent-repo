@@ -5,17 +5,12 @@ not simulated data. Uses the supervisor graph for concrete examples.
 """
 
 import asyncio
+from tkinter import FALSE
 from typing import Any, Dict
 
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.streaming.config import ChannelConfig, StreamMode, TokenStreamingConfig
-from ai_engine.streaming.events import (
-    ArtifactEvent,
-    ChannelValueEvent,
-    MessageReceivedEvent,
-    TokenStreamEvent,
-    ToolCallEvent,
-)
+from ai_engine.streaming.events import ArtifactEvent, MessageReceivedEvent, TokenStreamEvent, ToolCallEvent
 from ai_engine.streaming.processor import ChannelStreamingProcessor
 from langchain_core.messages import HumanMessage
 
@@ -34,7 +29,9 @@ async def real_supervisor_streaming_example():
 
     # Configure token streaming with tool calls
     token_config = TokenStreamingConfig(
-        enabled_namespaces={"main", "orchestrate", "orchestrator_tools"}, include_tool_calls=True
+        enabled_namespaces={"main"},
+        include_tool_calls=True,
+        # enabled_namespaces={"main", "orchestrate", "orchestrator_tools"}, include_tool_calls=False
     )
 
     # Create processor
@@ -63,6 +60,7 @@ async def real_supervisor_streaming_example():
     channel_updates = 0
     artifacts_created = 0
     tool_calls_seen = 0
+    message_received_count = 0
 
     # Stream the real execution
     async for event in processor.stream(graph, input_data, config=config, context=context):
@@ -71,14 +69,9 @@ async def real_supervisor_streaming_example():
             if event.content_delta.strip():  # Only show non-empty tokens
                 print(f"{event.content_delta}", end="| ", flush=True)
 
-        elif isinstance(event, ChannelValueEvent):
-            channel_updates += 1
-            if event.channel == "messages" and event.value:
-                latest_msg = event.value_delta
-                if event.value_delta:  # Skip user input echo
-                    print(
-                        f"\n💬 [{event.namespace}] {event.value_delta[0].type}: {event.value_delta[0].content[:100]}..."
-                    )
+        elif isinstance(event, MessageReceivedEvent):
+            message_received_count += 1
+            print(f"\n💬 [{event.namespace}] {event.message_type}: {event.message.content[:100]}...")
 
         elif isinstance(event, ArtifactEvent):
             artifacts_created += 1
@@ -87,16 +80,16 @@ async def real_supervisor_streaming_example():
             print(f"    From channel '{event.channel}': {str(event.artifact_data)[:80]}...")
 
         elif isinstance(event, ToolCallEvent):
-            if event.status == "started_streaming":
+            if event.status == "args_started":
                 tool_calls_seen += 1
                 print(f"\n🔧 [{event.namespace}] Started Tool call #{tool_calls_seen}: {event.tool_name}")
             if event.status == "args_streaming":
                 if event.args_delta.strip():
                     print(f"\n⚙️  [{event.namespace}] Tool args: {event.args_delta[:50]}...")
-            if event.status == "completed_streaming":
-                print(f"\n✅ [{event.namespace}] Tool completed: {event.tool_name}")
+            if event.status == "args_ready":
+                print(f"🏗️ Tool Call Construction Complete \n[{event.namespace}] Tool completed: {event.tool_name}")
                 print(f"    Args: {event.args}")
-            if event.status == "result_received":
+            if event.status == "result_success":
                 print(f"\n✅ [{event.namespace}] Tool result: {event.result}")
             if event.status == "result_error":
                 print(f"\n❌ [{event.namespace}] Tool error: {event.error}")
@@ -106,6 +99,7 @@ async def real_supervisor_streaming_example():
     print(f"   📊 Channel updates: {channel_updates}")
     print(f"   📄 Artifacts created: {artifacts_created}")
     print(f"   🔧 Tool calls: {tool_calls_seen}")
+    print(f"   💬 Message received: {message_received_count}")
     print("✅ Real supervisor streaming completed!")
 
 
@@ -190,6 +184,32 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
     ###
     ###
     ###

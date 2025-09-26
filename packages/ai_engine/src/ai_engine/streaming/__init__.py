@@ -10,7 +10,7 @@ This package consolidates and improves upon the functionality from:
 - utils/streaming_parser.py
 """
 
-from ai_engine.streaming.config import ChannelConfig, StreamMode, TokenStreamingConfig
+from ai_engine.streaming.config import ChannelConfig, ChannelType, StreamMode, TokenStreamingConfig
 
 # Event types
 from ai_engine.streaming.events import (
@@ -37,6 +37,7 @@ __all__ = [
     "ChannelConfig",
     "TokenStreamingConfig",
     "StreamMode",
+    "ChannelType",
     # Events
     "StreamEvent",
     "TokenStreamEvent",

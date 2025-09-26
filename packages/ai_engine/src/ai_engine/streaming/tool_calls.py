@@ -13,7 +13,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from langchain_core.messages import (
     AIMessage,
@@ -63,7 +63,7 @@ class ToolCallState:
 
     # Result state (from ToolMessage[Chunk])
     result: Optional[Dict[str, Any]] = None
-    result_status: Optional[str] = None  # "success" | "error"
+    result_status: Optional[Literal["success", "error"]] = None  # "success" | "error"
 
     def add_args_chunk(self, args_chunk: str) -> bool:
         """Add an argument chunk and try to parse.
@@ -179,6 +179,73 @@ class ToolCallTracker:
 
         return events
 
+    def process_full_tool_calls(
+        self, message: AIMessage, namespace: str, task_id: Optional[str] = None
+    ) -> List[ToolCallEvent]:
+        """Process a full (non-chunked) AIMessage containing tool calls.
+
+        For channels streamed in values/updates mode, arguments are present in full.
+        This will emit args_ready events for each tool call and register
+        state so subsequent ToolMessage results can be linked.
+        """
+        events: List[ToolCallEvent] = []
+
+        if not message.tool_calls:
+            return events
+
+        message_id = message.id or ""
+        for index, tool_call in enumerate(message.tool_calls):
+            tool_call_id = tool_call.get("id")
+            tool_name = tool_call.get("name")
+            args_obj = tool_call.get("args")
+            if not tool_call_id or not tool_name:
+                # Skip incomplete entries
+                logger.warning("Skipping tool call without id or name in full message processing")
+                continue
+
+            did_exist = True if self._id_to_state.get(tool_call_id) else False
+
+            # Parse args if needed
+            parsed_args: Optional[Dict[str, Any]] = None
+            accumulated_args: str = ""
+
+            parsed_args = args_obj
+            accumulated_args = json.dumps(args_obj)
+
+            # Register state for linking results
+            state = ToolCallState(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                message_id=message_id,
+                index=index,
+                accumulated_args=accumulated_args,
+                parsed_args=parsed_args,
+                status=ToolCallStatus.COMPLETED if parsed_args is not None else ToolCallStatus.ERROR,
+            )
+            self._id_to_state[tool_call_id] = state
+            if did_exist:
+                logger.warning(f"Tool call {tool_call_id} already exists in state")
+                continue
+
+            self._completed_calls.append(state)
+            events.append(
+                ToolCallEvent(
+                    tool_name=tool_name,
+                    namespace=namespace,
+                    task_id=task_id or "",
+                    tool_call_id=tool_call_id,
+                    message_id=message_id,
+                    index=index,
+                    status="args_ready" if parsed_args is not None else "args_error",
+                    args=parsed_args,
+                    args_delta=accumulated_args,
+                    args_accumulated=accumulated_args,
+                    error=None if parsed_args is not None else "Invalid JSON args in full message",
+                )
+            )
+
+        return events
+
     def process_tool_call_result(
         self, message: ToolMessageChunk | ToolMessage, namespace: str, task_id: Optional[str] = None
     ) -> List[ToolCallEvent]:
@@ -190,22 +257,34 @@ class ToolCallTracker:
             return events
 
         state = self._id_to_state.get(tool_call_id)
+        if state and state.result_status:
+            logger.warning(f"Tool call {tool_call_id} already completed")
+            return []
+
         if not state:
-            logger.warning(f"Received tool result for unknown tool_call_id={tool_call_id}")
-            return events
+            # Auto-create a synthetic state so the result can still be tracked
+            logger.warning(f"Received tool result for unknown tool_call_id={tool_call_id}; creating synthetic state")
+            state = ToolCallState(
+                tool_call_id=tool_call_id,
+                tool_name=message.name or "",
+                message_id=message.id or "",
+                index=0,
+                status=ToolCallStatus.COMPLETED,
+            )
+            self._id_to_state[tool_call_id] = state
 
         # Build result payload
         result_payload: Dict[str, Any] = {
-            "content": getattr(message, "content", None),
-            "artifact": getattr(message, "artifact", None),
-            "status": getattr(message, "status", None),
-            "response_metadata": getattr(message, "response_metadata", {}),
+            "content": message.content,
+            "artifact": message.artifact,
+            "status": message.status,
+            "response_metadata": message.response_metadata,
         }
 
         state.result = result_payload
-        state.result_status = getattr(message, "status", None)
+        state.result_status = message.status
 
-        status: str = "result_received" if getattr(message, "status", "success") == "success" else "result_error"
+        status: str = "result_success" if getattr(message, "status", "success") == "success" else "result_error"
 
         events.append(
             ToolCallEvent(
@@ -215,7 +294,7 @@ class ToolCallTracker:
                 tool_call_id=state.tool_call_id,
                 message_id=getattr(message, "id", None) or state.message_id,
                 index=state.index,
-                status=status,  # "result_received" | "result_error"
+                status=status,  # "result_success" | "result_error"
                 args=state.parsed_args,
                 result=result_payload,
                 error=str(getattr(message, "content", "")) if status == "result_error" else None,
@@ -252,7 +331,7 @@ class ToolCallTracker:
             tool_call_id=state.tool_call_id,  # type: ignore : we do the check before
             message_id=state.message_id,
             index=state.index,
-            status="started_streaming",
+            status="args_started",
         )
 
     def _process_tool_call_chunk(
@@ -296,7 +375,7 @@ class ToolCallTracker:
                 tool_name=state.tool_name,
                 args_delta=args_chunk,
                 args_accumulated=state.accumulated_args,
-                status="args_streaming" if not is_complete else "completed_streaming",
+                status="args_streaming" if not is_complete else "args_ready",
                 args=state.parsed_args,
             )
         ]

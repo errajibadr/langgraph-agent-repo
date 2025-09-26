@@ -91,22 +91,20 @@ class MessageReceivedEvent(StreamEvent):
 
 
 @dataclass
-class ToolCallEvent:
+class ToolCallEvent(StreamEvent):
     """Tool call lifecycle events."""
 
     tool_name: str
-    namespace: str
-    task_id: str | None
     tool_call_id: str
     message_id: str
     index: int
     status: Literal[
-        "started_streaming",
-        "args_streaming",
-        "completed_streaming",
-        "error_streaming",
-        "result_received",
-        "result_error",
+        "args_started",  # Started collecting arguments (streaming mode)
+        "args_streaming",  # Streaming arguments in progress
+        "args_ready",  # Arguments complete and ready for execution
+        "args_error",  # Error in argument collection/parsing
+        "result_success",  # Tool call executed successfully
+        "result_error",  # Tool call executed with error
     ]
     args: dict[str, Any] | None = None  # Tool call arguments
     args_delta: str = field(default="")

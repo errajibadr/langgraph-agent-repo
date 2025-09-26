@@ -15,15 +15,10 @@ from langchain_core.messages.ai import AIMessage, AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.tool import ToolMessage, ToolMessageChunk
 
-from .config import ChannelConfig, TokenStreamingConfig
-from .events import (
-    ArtifactEvent,
-    ChannelUpdateEvent,
-    ChannelValueEvent,
-    MessageReceivedEvent,
-    StreamEvent,
-    TokenStreamEvent,
-)
+from .artifact_channel_handler import ArtifactChannelHandler
+from .config import ChannelConfig, ChannelType, TokenStreamingConfig
+from .events import StreamEvent, TokenStreamEvent, ToolCallEvent
+from .message_channel_handler import MessageChannelHandler
 from .tool_calls import ToolCallTracker
 
 logger = logging.getLogger(__name__)
@@ -63,6 +58,14 @@ class ChannelStreamingProcessor:
         self._message_accumulators: Dict[str, str] = {}  # namespace:task_id -> accumulated content
         self._seen_message_ids: set[str] = set()
 
+        # Handlers
+        self._message_handler = MessageChannelHandler(
+            tool_call_tracker=self.tool_call_tracker,
+            seen_message_ids=self._seen_message_ids,
+            parse_namespace_components=self._parse_namespace_components,
+        )
+        self._artifact_handler = ArtifactChannelHandler()
+
     @property
     def default_stream_mode(self) -> Literal["updates", "values"]:
         """Default stream mode. update or values depending on prefer_updates"""
@@ -70,7 +73,7 @@ class ChannelStreamingProcessor:
 
     async def stream(
         self, graph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
-    ) -> AsyncGenerator[StreamEvent, None]:
+    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Stream from a LangGraph with separated channel and token streaming.
 
         Args:
@@ -80,7 +83,7 @@ class ChannelStreamingProcessor:
             **kwargs: Additional arguments passed to graph.astream()
 
         Yields:
-            StreamEvent instances for different types of streaming events
+            StreamEvent or ToolCallEvent instances for different types of events
         """
         # Determine which LangGraph streaming modes we need
         stream_modes = self._determine_stream_modes()
@@ -177,7 +180,9 @@ class ChannelStreamingProcessor:
             return "main"
         return ":".join(str(part) for part in namespace_tuple)
 
-    async def _process_chunk(self, namespace: str, mode: str, chunk: Any) -> AsyncGenerator[StreamEvent, None]:
+    async def _process_chunk(
+        self, namespace: str, mode: str, chunk: Any
+    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process a chunk and emit appropriate events."""
         logger.debug(f"Processing chunk: namespace={namespace}, mode={mode}")
 
@@ -196,7 +201,7 @@ class ChannelStreamingProcessor:
 
     async def _process_token_chunk(
         self, namespace: str, chunk: tuple[BaseMessage, Dict[str, Any]]
-    ) -> AsyncGenerator[StreamEvent, None]:
+    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process message chunks for token-by-token streaming."""
         message, metadata = chunk
 
@@ -266,7 +271,9 @@ class ChannelStreamingProcessor:
         base_namespace = namespace.split(":")[0] if ":" in namespace else namespace
         return base_namespace in self.token_streaming.enabled_namespaces
 
-    async def _process_channel_values(self, namespace: str, chunk: Dict[str, Any]) -> AsyncGenerator[StreamEvent, None]:
+    async def _process_channel_values(
+        self, namespace: str, chunk: Dict[str, Any]
+    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process state values for channel monitoring."""
         for channel_key, config in self.channels.items():
             if channel_key not in chunk:
@@ -287,46 +294,40 @@ class ChannelStreamingProcessor:
             if config.filter_fn and not config.filter_fn(current_value):
                 continue
 
-            # Check if this channel should parse messages
-            if config.parse_messages and self._is_message_channel_value(current_value):
-                async for event in self._process_message_channel_value(
-                    namespace, channel_key, current_value, previous_value
-                ):
-                    yield event
-                continue  # Skip regular channel processing
-
-            # Calculate delta
-            value_delta = self._calculate_delta(previous_value, current_value)
-
             # Extract components
             node_name, task_id = self._parse_namespace_components(namespace)
 
-            # Create appropriate event
-            if config.artifact_type:
-                if not current_value:
-                    continue
-                yield ArtifactEvent(
+            # Calculate delta for generic channels
+            value_delta = self._calculate_delta(previous_value, current_value)
+
+            # Route based on channel type
+            if config.channel_type == ChannelType.MESSAGE:
+                # current_value expected to be BaseMessage or list[BaseMessage]
+                async for event in self._message_handler.handle_values(
                     namespace=namespace,
-                    channel=channel_key,
-                    artifact_type=config.artifact_type,
-                    artifact_data=current_value,
-                    is_update=previous_value is not None,
-                    task_id=task_id,
-                    node_name=node_name,
-                )
-            else:
-                yield ChannelValueEvent(
-                    namespace=namespace,
-                    channel=channel_key,
-                    value=current_value,
-                    value_delta=value_delta,
-                    task_id=task_id,
-                    node_name=node_name,
-                )
+                    channel_key=channel_key,
+                    current_value=current_value,
+                    previous_value=previous_value,
+                ):
+                    yield event
+                continue
+
+            # ARTIFACT or GENERIC
+            async for event in self._artifact_handler.handle_values(
+                namespace=namespace,
+                channel_key=channel_key,
+                current_value=current_value,
+                previous_value=previous_value,
+                artifact_type=config.artifact_type,
+                node_name=node_name,
+                task_id=task_id,
+                value_delta=value_delta,
+            ):
+                yield event
 
     async def _process_channel_updates(
         self, namespace: str, chunk: Dict[str, Any]
-    ) -> AsyncGenerator[StreamEvent, None]:
+    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process state updates for channel monitoring."""
         # Updates format: {node_name: {channel: value, ...}}
         node_name, state_update = next(iter(chunk.items()))
@@ -343,27 +344,29 @@ class ChannelStreamingProcessor:
             # Extract components
             _, task_id = self._parse_namespace_components(namespace)
 
-            # Create appropriate event
-            if config.artifact_type:
-                if not update_value:
-                    continue
-                yield ArtifactEvent(
+            # Route based on channel type
+            if config.channel_type == ChannelType.MESSAGE:
+                # When updates mode is used for message channels, treat updates
+                # as newly appended messages and process them similarly
+                async for event in self._message_handler.handle_values(
                     namespace=namespace,
-                    channel=channel_key,
-                    artifact_type=config.artifact_type,
-                    artifact_data=update_value,
-                    is_update=True,
-                    task_id=task_id,
-                    node_name=node_name,
-                )
-            else:
-                yield ChannelUpdateEvent(
-                    namespace=namespace,
-                    channel=channel_key,
-                    node_name=node_name,
-                    state_update={channel_key: update_value},
-                    task_id=task_id,
-                )
+                    channel_key=channel_key,
+                    current_value=update_value,
+                    previous_value=None,
+                ):
+                    yield event
+                continue
+
+            # ARTIFACT or GENERIC
+            async for event in self._artifact_handler.handle_update(
+                namespace=namespace,
+                channel_key=channel_key,
+                update_value=update_value,
+                artifact_type=config.artifact_type,
+                node_name=node_name,
+                task_id=task_id,
+            ):
+                yield event
 
     def _parse_namespace_components(self, namespace: str) -> tuple[str, Optional[str]]:
         """Parse namespace to extract node_name and task_id."""
@@ -420,73 +423,18 @@ class ChannelStreamingProcessor:
             return self.tool_call_tracker.get_all_completed_calls()
         return []
 
-    # Message parsing helper methods
+    # Message parsing helper methods (kept for compatibility)
 
     def _is_message_channel_value(self, value: Any) -> bool:
-        """Check if a channel value contains messages."""
+        """Check if a channel value contains messages.
+
+        DEPRECATED: Channel type should be used instead of this heuristic.
+        """
         if isinstance(value, list):
             return len(value) > 0 and all(isinstance(item, BaseMessage) for item in value)
         elif isinstance(value, BaseMessage):
             return True
         return False
-
-    async def _process_message_channel_value(
-        self, namespace: str, channel_key: str, current_value: Any, previous_value: Any
-    ) -> AsyncGenerator[MessageReceivedEvent, None]:
-        """Process channel values that contain messages with deduplication."""
-        from langchain_core.messages import ToolMessage, ToolMessageChunk
-
-        # Handle both list of messages and single message
-        if isinstance(current_value, list):
-            messages = current_value
-            prev_messages = previous_value if isinstance(previous_value, list) else []
-        else:
-            messages = [current_value]
-            prev_messages = [previous_value] if isinstance(previous_value, BaseMessage) else []
-
-        # Find new messages (delta)
-        new_messages = messages[len(prev_messages) :] if len(messages) > len(prev_messages) else []
-
-        # Process each new message
-        for msg in new_messages:
-            # Extract message metadata
-            msg_id = getattr(msg, "id", None)
-            has_tool_calls = hasattr(msg, "tool_calls") and bool(msg.tool_calls)
-            tool_call_ids = []
-
-            if has_tool_calls:
-                tool_call_ids = [tc.get("id", "") for tc in msg.tool_calls if tc.get("id")]
-
-            # Check if this message was already processed via token streaming
-            was_streamed = msg_id is not None and msg_id in self._seen_message_ids
-
-            # Add to seen messages if not already there
-            if msg_id and not was_streamed:
-                self._seen_message_ids.add(msg_id)
-
-            # Extract components
-            node_name, task_id = self._parse_namespace_components(namespace)
-
-            # Determine message type
-            message_type = ""
-            if isinstance(msg, AIMessage):
-                message_type = "ai"
-            elif isinstance(msg, ToolMessage):
-                message_type = "tool"
-            else:
-                message_type = msg.__class__.__name__.lower().replace("message", "")
-
-            # Emit MessageReceivedEvent
-            yield MessageReceivedEvent(
-                namespace=namespace,
-                message=msg,
-                was_streamed=was_streamed,
-                has_tool_calls=has_tool_calls,
-                tool_call_ids=tool_call_ids,
-                source="channel",
-                message_type=message_type,
-                task_id=task_id,
-            )
 
     def reset_state(self):
         """Reset all processor state."""
