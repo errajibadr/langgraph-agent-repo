@@ -37,7 +37,7 @@ class ChannelStreamingProcessor:
         self,
         channels: List[ChannelConfig],
         token_streaming: Optional[TokenStreamingConfig] = None,
-        prefer_updates: bool = False,
+        # prefer_updates: bool = False,
     ):
         """Initialize the streaming processor.
 
@@ -48,7 +48,7 @@ class ChannelStreamingProcessor:
         """
         self.channels = {config.key: config for config in channels}
         self.token_streaming = token_streaming or TokenStreamingConfig()
-        self.prefer_updates = prefer_updates
+        # self.prefer_updates = prefer_updates
 
         # Initialize tool call tracker if enabled
         self.tool_call_tracker = ToolCallTracker()
@@ -69,7 +69,8 @@ class ChannelStreamingProcessor:
     @property
     def default_stream_mode(self) -> Literal["updates", "values"]:
         """Default stream mode. update or values depending on prefer_updates"""
-        return "updates" if not self.prefer_updates else "values"
+        return "values"
+        # return "updates" if not self.prefer_updates else "values"
 
     async def stream(
         self, graph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
@@ -194,10 +195,6 @@ class ChannelStreamingProcessor:
             # Channel value monitoring
             async for event in self._process_channel_values(namespace, chunk):
                 yield event
-        elif mode == "updates":
-            # Channel update monitoring
-            async for event in self._process_channel_updates(namespace, chunk):
-                yield event
 
     async def _process_token_chunk(
         self, namespace: str, chunk: tuple[BaseMessage, Dict[str, Any]]
@@ -321,49 +318,6 @@ class ChannelStreamingProcessor:
                 node_name=node_name,
                 task_id=task_id,
                 value_delta=value_delta,
-            ):
-                yield event
-
-    async def _process_channel_updates(
-        self, namespace: str, chunk: Dict[str, Any]
-    ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
-        """Process state updates for channel monitoring."""
-        # Updates format: {node_name: {channel: value, ...}}
-        node_name, state_update = next(iter(chunk.items()))
-
-        for channel_key, config in self.channels.items():
-            if channel_key not in state_update:
-                continue
-
-            # Apply filter if configured
-            update_value = state_update[channel_key]
-            if config.filter_fn and not config.filter_fn(update_value):
-                continue
-
-            # Extract components
-            _, task_id = self._parse_namespace_components(namespace)
-
-            # Route based on channel type
-            if config.channel_type == ChannelType.MESSAGE:
-                # When updates mode is used for message channels, treat updates
-                # as newly appended messages and process them similarly
-                async for event in self._message_handler.handle_values(
-                    namespace=namespace,
-                    channel_key=channel_key,
-                    current_value=update_value,
-                    previous_value=None,
-                ):
-                    yield event
-                continue
-
-            # ARTIFACT or GENERIC
-            async for event in self._artifact_handler.handle_update(
-                namespace=namespace,
-                channel_key=channel_key,
-                update_value=update_value,
-                artifact_type=config.artifact_type,
-                node_name=node_name,
-                task_id=task_id,
             ):
                 yield event
 

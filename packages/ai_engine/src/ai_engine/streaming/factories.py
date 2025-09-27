@@ -131,7 +131,7 @@ def create_multi_agent_processor(
     return ChannelStreamingProcessor(
         channels=[
             ChannelConfig(key="messages", stream_mode=StreamMode.VALUES_ONLY),
-            ChannelConfig(key="supervisor_messages", stream_mode=StreamMode.UPDATES_ONLY),
+            ChannelConfig(key="supervisor_messages", stream_mode=StreamMode.VALUES_ONLY),
             ChannelConfig(key="notes", artifact_type="Document"),
             ChannelConfig(key="questions", artifact_type="UserClarification"),
             ChannelConfig(key="artifacts", artifact_type="GeneratedArtifact"),
@@ -161,7 +161,7 @@ def create_performance_optimized_processor(
     Returns:
         Performance-optimized ChannelStreamingProcessor
     """
-    channels = [ChannelConfig(key=channel, stream_mode=StreamMode.UPDATES_ONLY) for channel in monitored_channels]
+    channels = [ChannelConfig(key=channel, stream_mode=StreamMode.VALUES_ONLY) for channel in monitored_channels]
 
     return ChannelStreamingProcessor(
         channels=channels,

@@ -48,7 +48,7 @@ class MessageChannelHandler:
             if not was_streamed:
                 self.seen_message_ids.add(msg_id)  # type: ignore we do check that msg_id is not None
 
-            node_name, task_id = self.parse_namespace_components(namespace)
+            _, task_id = self.parse_namespace_components(namespace)
 
             # Tool call lifecycle integration
             if isinstance(msg, AIMessage):

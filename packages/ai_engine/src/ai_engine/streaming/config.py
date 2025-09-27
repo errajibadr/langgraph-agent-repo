@@ -15,7 +15,7 @@ class StreamMode(Enum):
     """Streaming modes for state channel monitoring."""
 
     VALUES_ONLY = "values"  # Stream full state values after node execution
-    UPDATES_ONLY = "updates"  # Stream only state deltas/changes
+    # UPDATES_ONLY = "updates"  # Stream only state deltas/changes
 
 
 class ChannelType(Enum):
@@ -54,7 +54,7 @@ class ChannelConfig:
     """
 
     key: str  # State key to monitor (e.g., "messages", "notes", "questions")
-    stream_mode: StreamMode = StreamMode.UPDATES_ONLY  # How to stream this channel
+    stream_mode: StreamMode = StreamMode.VALUES_ONLY  # How to stream this channel
     channel_type: ChannelType = ChannelType.GENERIC  # Channel semantics
     artifact_type: Optional[str] = None  # Map to artifact type for UI display
     filter_fn: Optional[Callable[[Any], bool]] = None  # Custom filter for values

@@ -21,7 +21,7 @@ async def real_supervisor_streaming_example():
 
     # Configure channels to monitor
     channels = [
-        ChannelConfig(key="messages", stream_mode=StreamMode.UPDATES_ONLY, parse_messages=True),
+        ChannelConfig(key="messages", stream_mode=StreamMode.VALUES_ONLY, parse_messages=True),
         ChannelConfig(key="notes", artifact_type="Document"),
         ChannelConfig(key="raw_notes", artifact_type="RawResearch"),
     ]
@@ -37,7 +37,6 @@ async def real_supervisor_streaming_example():
     processor = ChannelStreamingProcessor(
         channels=channels,
         token_streaming=token_config,
-        prefer_updates=False,  # Use values for demo visibility
     )
 
     # Get real supervisor graph
@@ -191,6 +190,12 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ###
+    ###
+    ###
+    ###
+    ###
+    ###
     ###
     ###
     ###
