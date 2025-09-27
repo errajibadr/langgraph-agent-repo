@@ -31,18 +31,18 @@ from .events import ToolCallEvent
 logger = logging.getLogger(__name__)
 
 
-class ToolCallStatus(Enum):
-    """Status of a streaming tool call.
+class ToolCallArgumentStatus(Enum):
+    """Status of tool call argument construction (NOT execution).
 
-    NOTE: COMPLETED refers to argument streaming completion (JSON parsed),
-    not the final tool execution result. Tool execution results are tracked
-    via separate ToolCallEvent statuses (result_received/result_error).
+    This tracks the lifecycle of building tool call arguments, whether from
+    streaming chunks or complete state messages. Tool execution status is
+    tracked separately via ToolCallEvent status fields.
     """
 
-    INITIALIZING = "initializing"  # First message received
-    STREAMING = "streaming"  # Accumulating argument chunks
-    COMPLETED = "completed"  # Successfully parsed final JSON (args complete)
-    ERROR = "error"  # Failed to parse or other error while streaming args
+    INITIALIZING = "initializing"  # First message received with metadata
+    STREAMING_ARGS = "streaming_args"  # Accumulating argument chunks
+    ARGS_READY = "args_ready"  # Arguments parsed successfully, ready for execution
+    ARGS_INVALID = "args_invalid"  # Failed to parse arguments
 
 
 @dataclass
@@ -58,7 +58,7 @@ class ToolCallState:
     # Streaming state
     accumulated_args: str = ""  # Building JSON string
     parsed_args: Optional[Dict[str, Any]] = None  # Final parsed arguments
-    status: ToolCallStatus = ToolCallStatus.INITIALIZING
+    status: ToolCallArgumentStatus = ToolCallArgumentStatus.INITIALIZING
     error_message: Optional[str] = None
 
     # Result state (from ToolMessage[Chunk])
@@ -72,13 +72,13 @@ class ToolCallState:
             args_chunk: New chunk of arguments
 
         Returns:
-            True if parsing succeeded (call is complete)
+            True if parsing succeeded (arguments are ready)
         """
-        if self.status == ToolCallStatus.ERROR:
+        if self.status == ToolCallArgumentStatus.ARGS_INVALID:
             return False
 
         self.accumulated_args += args_chunk
-        self.status = ToolCallStatus.STREAMING
+        self.status = ToolCallArgumentStatus.STREAMING_ARGS
 
         # Try to parse the accumulated JSON
         return self.try_parse_args()
@@ -87,7 +87,7 @@ class ToolCallState:
         """Attempt to parse accumulated arguments as JSON.
 
         Returns:
-            True if parsing succeeded and call is complete
+            True if parsing succeeded and arguments are ready
         """
         if not self.accumulated_args.strip():
             return False
@@ -95,13 +95,13 @@ class ToolCallState:
         try:
             # Try to parse the accumulated JSON
             self.parsed_args = json.loads(self.accumulated_args)
-            self.status = ToolCallStatus.COMPLETED
-            logger.debug(f"Tool call {self.tool_call_id} completed: {self.parsed_args}")
+            self.status = ToolCallArgumentStatus.ARGS_READY
+            logger.debug(f"Tool call {self.tool_call_id} arguments ready: {self.parsed_args}")
             return True
         except json.JSONDecodeError as e:
             # Check if it looks like it should be complete but failed
             if self._looks_complete_but_invalid():
-                self.status = ToolCallStatus.ERROR
+                self.status = ToolCallArgumentStatus.ARGS_INVALID
                 self.error_message = f"JSON parse error: {str(e)}"
                 logger.warning(f"Tool call {self.tool_call_id} failed to parse: {self.accumulated_args}")
                 return False
@@ -118,7 +118,11 @@ class ToolCallState:
 
 
 class ToolCallTracker:
-    """Track tool call streaming state using (message_id, index) pattern.
+    """Track tool call lifecycle with clear separation of concerns:
+
+    - handle_tool_calls_from_stream(): Handle arguments incrementally from streaming chunks
+    - handle_tool_calls_from_state(): Handle complete tool calls from state channels
+    - handle_tool_execution_result(): Handle tool execution results
 
     Implements the linking strategy documented in 0_stream_parsing.md:
     - First message: Store metadata keyed by (message_id, index)
@@ -144,51 +148,66 @@ class ToolCallTracker:
         # Map tool_call_id -> ToolCallState for quick lookup on results
         self._id_to_state: Dict[str, ToolCallState] = {}
 
-    def process_stream_tool_calls(
-        self, message: AIMessageChunk, namespace: str, task_id: Optional[str] = None
-    ) -> List[Any]:
-        """Process a message and return generated events.
+    def handle_tool_calls_from_stream(
+        self, chunk: AIMessageChunk, namespace: str, task_id: Optional[str] = None
+    ) -> List[ToolCallEvent]:
+        """Handle tool call arguments incrementally from streaming chunks.
+
+        Handles the complex streaming pattern where:
+        1. First message contains complete metadata (id, name)
+        2. Subsequent chunks only contain argument pieces
+        3. Arguments are reconstructed incrementally until valid JSON
 
         Args:
-            message: The AI message to process
+            chunk: The AI message chunk to process
             namespace: Current namespace
             task_id: Optional task ID
 
         Returns:
-            List of generated events (ToolCallStartedEvent, ToolCallProgressEvent, etc.)
+            List of generated events (started, progress, ready, error)
         """
         events = []
 
-        if not message.id:
+        if not chunk.id:
             logger.warning("Missing Message ID for tool call processing")
-            logger.debug(f"Message: {message.pretty_repr()}")
+            logger.debug(f"Message: {chunk.pretty_repr()}")
             return events
 
-        if not message.tool_calls and not message.tool_call_chunks:
+        if not chunk.tool_calls and not chunk.tool_call_chunks:
             return events
 
         # Check for tool call initialization (first message with complete metadata)
-        for i, tool_call in enumerate(message.tool_calls):
+        for i, tool_call in enumerate(chunk.tool_calls):
             if tool_call.get("id") and tool_call.get("name"):
                 # This is a first message with complete metadata
-                index = message.additional_kwargs.get("tool_calls", [])[i].get("index", i)
-                events.append(self._initialize_tool_call(message.id, index, tool_call, namespace, task_id))
-        print(f"initialized tool calls {len(events)}")
+                index = chunk.additional_kwargs.get("tool_calls", [])[i].get("index", i)
+                events.append(self._initialize_tool_call(chunk.id, index, tool_call, namespace, task_id))
 
-        for chunk in message.tool_call_chunks:
-            if chunk["args"]:  # Only process chunks with argument content
-                events.extend(self._process_tool_call_chunk(message.id, chunk, namespace, task_id))
+        logger.debug(f"Initialized {len(events)} tool calls")
+
+        # Process argument chunks
+        for tool_call_chunk in chunk.tool_call_chunks:
+            if tool_call_chunk["args"]:  # Only process chunks with argument content
+                events.extend(self._process_tool_call_chunk(chunk.id, tool_call_chunk, namespace, task_id))
 
         return events
 
-    def process_full_tool_calls(
+    def handle_tool_calls_from_state(
         self, message: AIMessage, namespace: str, task_id: Optional[str] = None
     ) -> List[ToolCallEvent]:
-        """Process a full (non-chunked) AIMessage containing tool calls.
+        """Handle complete tool calls from state channels.
 
-        For channels streamed in values/updates mode, arguments are present in full.
-        This will emit args_ready events for each tool call and register
-        state so subsequent ToolMessage results can be linked.
+        Handles complete tool calls from state channels where arguments are
+        already parsed and ready for execution. Skips the streaming lifecycle
+        and directly emits 'args_ready' events.
+
+        Args:
+            message: Complete AIMessage containing tool calls
+            namespace: Current namespace
+            task_id: Optional task ID
+
+        Returns:
+            List of ToolCallEvents with 'args_ready' status
         """
         events: List[ToolCallEvent] = []
 
@@ -200,17 +219,17 @@ class ToolCallTracker:
             tool_call_id = tool_call.get("id")
             tool_name = tool_call.get("name")
             args_obj = tool_call.get("args")
+
             if not tool_call_id or not tool_name:
                 # Skip incomplete entries
-                logger.warning("Skipping tool call without id or name in full message processing")
+                logger.warning("Skipping tool call without id or name in complete message processing")
                 continue
-            old_state = self._id_to_state.get(tool_call_id)
-            # Parse args if needed
-            parsed_args: Optional[Dict[str, Any]] = None
-            accumulated_args: str = ""
 
-            parsed_args = args_obj
-            accumulated_args = json.dumps(args_obj)
+            old_state = self._id_to_state.get(tool_call_id)
+
+            # Arguments are already complete
+            parsed_args: Optional[Dict[str, Any]] = args_obj
+            accumulated_args: str = json.dumps(args_obj) if args_obj else ""
 
             # Register state for linking results
             state = ToolCallState(
@@ -220,13 +239,20 @@ class ToolCallTracker:
                 index=index,
                 accumulated_args=accumulated_args,
                 parsed_args=parsed_args,
-                status=ToolCallStatus.COMPLETED if parsed_args is not None else ToolCallStatus.ERROR,
+                status=ToolCallArgumentStatus.ARGS_READY
+                if parsed_args is not None
+                else ToolCallArgumentStatus.ARGS_INVALID,
                 result_status=old_state.result_status if old_state else None,
                 result=old_state.result if old_state else None,
             )
             self._id_to_state[tool_call_id] = state
-            if old_state and old_state.status in [ToolCallStatus.COMPLETED, ToolCallStatus.ERROR]:
-                logger.debug(f"Tool call {tool_call_id} already exists in Completed state; we skip emitting")
+
+            # Skip if already processed (deduplication)
+            if old_state and old_state.status in [
+                ToolCallArgumentStatus.ARGS_READY,
+                ToolCallArgumentStatus.ARGS_INVALID,
+            ]:
+                logger.debug(f"Tool call {tool_call_id} already processed; skipping emission")
                 continue
 
             self._completed_calls.append(state)
@@ -242,25 +268,37 @@ class ToolCallTracker:
                     args=parsed_args,
                     args_delta=accumulated_args,
                     args_accumulated=accumulated_args,
-                    error=None if parsed_args is not None else "Invalid JSON args in full message",
+                    error=None if parsed_args is not None else "Invalid JSON args in complete message",
                 )
             )
 
         return events
 
-    def process_tool_call_result(
-        self, message: ToolMessageChunk | ToolMessage, namespace: str, task_id: Optional[str] = None
+    def handle_tool_execution_result(
+        self, result_message: ToolMessageChunk | ToolMessage, namespace: str, task_id: Optional[str] = None
     ) -> List[ToolCallEvent]:
-        """Process a tool call result message and return generated events."""
+        """Handle tool execution results.
+
+        Processes ToolMessage/ToolMessageChunk containing the results of tool execution.
+        Links results back to the original tool call state using tool_call_id.
+
+        Args:
+            result_message: Message containing tool execution result
+            namespace: Current namespace
+            task_id: Optional task ID
+
+        Returns:
+            List of ToolCallEvents with execution results
+        """
         events: List[ToolCallEvent] = []
 
-        tool_call_id = message.tool_call_id
+        tool_call_id = result_message.tool_call_id
         if not tool_call_id:
             return events
 
         state = self._id_to_state.get(tool_call_id)
         if state and state.result_status:
-            logger.warning(f"Tool call {tool_call_id} already completed")
+            logger.warning(f"Tool call {tool_call_id} result already processed")
             return []
 
         if not state:
@@ -268,26 +306,26 @@ class ToolCallTracker:
             logger.warning(f"Received tool result for unknown tool_call_id={tool_call_id}; creating synthetic state")
             state = ToolCallState(
                 tool_call_id=tool_call_id,
-                tool_name=message.name or "",
-                message_id=message.id or "",
+                tool_name=result_message.name or "",
+                message_id=result_message.id or "",
                 index=0,
-                status=ToolCallStatus.COMPLETED,
+                status=ToolCallArgumentStatus.ARGS_READY,
             )
             self._id_to_state[tool_call_id] = state
 
         # Build result payload
         result_payload: Dict[str, Any] = {
-            "content": message.content,
-            "artifact": message.artifact,
-            "status": message.status,
-            "response_metadata": message.response_metadata,
+            "content": result_message.content,
+            "artifact": result_message.artifact,
+            "status": result_message.status,
+            "response_metadata": result_message.response_metadata,
         }
 
         state.result = result_payload
-        state.result_status = message.status
+        state.result_status = result_message.status
         self._id_to_state[tool_call_id] = state
 
-        status: str = "result_success" if message.status == "success" else "result_error"
+        status: str = "result_success" if result_message.status == "success" else "result_error"
 
         events.append(
             ToolCallEvent(
@@ -295,12 +333,12 @@ class ToolCallTracker:
                 namespace=namespace,
                 task_id=task_id or "",
                 tool_call_id=state.tool_call_id,
-                message_id=getattr(message, "id", None) or state.message_id,
+                message_id=result_message.id or state.message_id,
                 index=state.index,
                 status=status,  # "result_success" | "result_error"
                 args=state.parsed_args,
                 result=result_payload,
-                error=str(getattr(message, "content", "")) if status == "result_error" else None,
+                error=str(result_message.content) if status == "result_error" else None,
             )
         )
 
@@ -319,7 +357,7 @@ class ToolCallTracker:
             tool_name=tool_call["name"],
             message_id=message_id,
             index=index,
-            status=ToolCallStatus.INITIALIZING,
+            status=ToolCallArgumentStatus.INITIALIZING,
         )
 
         self._active_calls[key] = state
@@ -357,12 +395,12 @@ class ToolCallTracker:
 
         args_chunk = chunk["args"] or ""
 
-        # Add the chunk and check if complete
-        is_complete = state.add_args_chunk(args_chunk)
+        # Add the chunk and check if arguments are ready
+        is_ready = state.add_args_chunk(args_chunk)
 
-        # If complete, generate completion event and move to completed
-        if is_complete:
-            if state.status == ToolCallStatus.COMPLETED:
+        # If arguments are ready, generate completion event and move to completed
+        if is_ready:
+            if state.status == ToolCallArgumentStatus.ARGS_READY:
                 self._completed_calls.append(state)
             # Remove from active calls (keep id->state mapping for result linking)
             del self._active_calls[key]
@@ -378,7 +416,7 @@ class ToolCallTracker:
                 tool_name=state.tool_name,
                 args_delta=args_chunk,
                 args_accumulated=state.accumulated_args,
-                status="args_streaming" if not is_complete else "args_ready",
+                status="args_streaming" if not is_ready else "args_ready",
                 args=state.parsed_args,
             )
         ]
@@ -401,7 +439,7 @@ class ToolCallTracker:
         """Get all completed tool calls with history."""
         current_completed = []
         for state in self._completed_calls:
-            if state.status == ToolCallStatus.COMPLETED and state.parsed_args is not None:
+            if state.status == ToolCallArgumentStatus.ARGS_READY and state.parsed_args is not None:
                 current_completed.append(
                     {
                         "id": state.tool_call_id,
@@ -418,7 +456,7 @@ class ToolCallTracker:
         """Start a new iteration, moving completed calls to history."""
         # Move completed calls to history
         for state in self._completed_calls:
-            if state.status == ToolCallStatus.COMPLETED and state.parsed_args is not None:
+            if state.status == ToolCallArgumentStatus.ARGS_READY and state.parsed_args is not None:
                 self._call_history.append(
                     {
                         "id": state.tool_call_id,
@@ -443,4 +481,7 @@ class ToolCallTracker:
         self._seen_message_ids.clear()
         self._id_to_state.clear()
         self._current_iteration = 0
-        #
+
+    def has_tool_call(self, tool_call_id: str) -> bool:
+        """Check if a tool call has been processed."""
+        return tool_call_id in self._id_to_state

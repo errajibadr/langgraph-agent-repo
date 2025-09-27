@@ -29,7 +29,7 @@ from ai_engine.streaming.factories import create_default_channels, create_simple
 from ai_engine.streaming.processor import ChannelStreamingProcessor
 
 # Tool call handling
-from ai_engine.streaming.tool_calls import ToolCallState, ToolCallStatus, ToolCallTracker
+from ai_engine.streaming.tool_calls import ToolCallArgumentStatus, ToolCallState, ToolCallTracker
 
 __all__ = [
     # Core components
@@ -48,7 +48,7 @@ __all__ = [
     # Tool calls
     "ToolCallTracker",
     "ToolCallState",
-    "ToolCallStatus",
+    "ToolCallArgumentStatus",
     # Factories
     "create_default_channels",
     "create_simple_processor",

@@ -48,10 +48,11 @@ The **ChannelStreamingProcessor** is a sophisticated streaming system that provi
      MessageChannelHandler: Handles message channels
      ArtifactChannelHandler: Handles artifact channels - For now doesn't handle state of artifacts - re-emits all artifacts continuously at each graph step - we Will want to change this in the future.
      TokenStreamHandler: (Doesn't exist - logic is directly in the processor.py) Handles token streaming 
-     ToolCallTracker: (Today namely `ToolCallTracker`) Handles tool call lifecycle  
-           - Tool call ( token by token streaming or plain call) 
-           - result of tool calls etc.
-           - Keeps internal state with tools calls made and result of those tool calls
+     ToolCallTracker: Handles tool call lifecycle with clear separation:
+          - handle_tool_calls_from_stream(): Token-by-token streaming tool calls
+          - handle_tool_calls_from_state(): Complete tool calls from state channels
+          - handle_tool_execution_result(): Tool execution results
+          - Keeps internal state with tool calls made and results of those tool calls
 
 ### 2. Stream Processing Phase
 ```python
@@ -156,16 +157,21 @@ content='' additional_kwargs={'tool_calls': [{'index': 0, 'id': None, 'function'
 
 4. **JSON Reconstruction**: Incrementally builds and validates JSON arguments
 
-### Tool Call State Machine
+### Tool Call Argument State Machine
 ```python
-class ToolCallStatus:
-    INITIALIZING → STREAMING → COMPLETED
-                            → ERROR
+class ToolCallArgumentStatus:
+    INITIALIZING → STREAMING_ARGS → ARGS_READY
+                                  → ARGS_INVALID
 ```
 
+**Key Clarification**: This tracks argument construction status only, NOT tool execution status. Tool execution results are tracked separately via ToolCallEvent status fields.
+
 ### Key Components
-- **ToolCallState**: Tracks individual tool call progression
-- **ToolCallTracker**: Manages all active tool calls
+- **ToolCallState**: Tracks individual tool call argument construction progression
+- **ToolCallTracker**: Manages all active tool calls with clear method separation:
+  - `handle_tool_calls_from_stream()`: Processes streaming chunks
+  - `handle_tool_calls_from_state()`: Processes complete state messages
+  - `handle_tool_execution_result()`: Processes tool execution results
 - **JSON Validation**: Incremental parsing with error recovery
 
 ## 5. Specialized Handlers
@@ -210,13 +216,22 @@ State change → ChannelValueEvent | ArtifactEvent
 ```
 
 ### 3. Tool Call Flow
+
+**From Token Streaming (handle_tool_calls_from_stream)**:
 ```
-First chunk → ToolCallStartedStreamEvent
-Arg chunks → ToolCallProgressStreamEvent (multiple)
-Complete   → ToolCallCompletedStreamEvent
+First chunk → ToolCallEvent(status="args_started")
+Arg chunks → ToolCallEvent(status="args_streaming") (multiple)
+Complete   → ToolCallEvent(status="args_ready")
 Result     → ToolCallEvent(status="result_success")
 ```
-Tool Calls can also be in messageChannel
+
+**From State Channel (handle_tool_calls_from_state)**:
+```
+Complete message → ToolCallEvent(status="args_ready") [skips streaming lifecycle]
+Result          → ToolCallEvent(status="result_success")
+```
+
+**Key Point**: Tool calls appear in BOTH streams when token streaming is enabled, but deduplication prevents double processing.
 
 ## 🚀 USAGE PATTERNS
 
@@ -271,9 +286,10 @@ processor = ChannelStreamingProcessor(
 - Type-safe event system prevents runtime errors
 
 ### 4. Performance Optimization
-- **Deduplication**: Prevents duplicate processing of same content
+- **Deduplication**: Prevents duplicate processing when tool calls appear in both token streams and state channels
+- **Source Tracking**: Events include source information (token_stream vs state_channel) for better debugging
 - **Filtering**: Custom filters to reduce unnecessary processing
-- **Updates Mode**: Efficient delta-only processing option
+- **Selective Streaming**: Choose between token streaming and state monitoring based on needs
 
 ### 5. Extensibility  
 - **Factory pattern** for common configurations
@@ -282,9 +298,21 @@ processor = ChannelStreamingProcessor(
 
 ## 📝 MIGRATION & EVOLUTION
 
+### Legacy Code Consolidation
 The Stream Processor consolidates and improves functionality from:
-- `utils/channel_streaming_v2.py` → Core processor logic
-- `utils/streaming_parser.py` → Tool call streaming system
+- `utils/channel_streaming_v2.py` → Core processor logic (✅ Migrated)
+- `utils/streaming_parser.py` → Tool call streaming system (✅ Migrated)
+
+### Method Evolution  
+**Old ambiguous methods** → **New clear methods**:
+- `process_stream_tool_calls()` → `handle_tool_calls_from_stream()`
+- `process_full_tool_calls()` → `handle_tool_calls_from_state()`  
+- `process_tool_call_result()` → `handle_tool_execution_result()`
+
+### Status Clarity
+**Old ambiguous status** → **New clear status**:
+- `ToolCallStatus.COMPLETED` → `ToolCallArgumentStatus.ARGS_READY`
+- Clear separation between argument construction vs tool execution status
 
 This architecture provides a clean foundation for future streaming enhancements while maintaining backward compatibility through factory functions and configuration options.
 ```

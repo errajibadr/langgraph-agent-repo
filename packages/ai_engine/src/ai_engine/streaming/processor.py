@@ -228,13 +228,13 @@ class ChannelStreamingProcessor:
                 message.tool_calls or message.tool_call_chunks
             ):  # is a tool call
                 node_name, task_id = self._parse_namespace_components(namespace)
-                tool_events = self.tool_call_tracker.process_stream_tool_calls(message, namespace, task_id)  # type: ignore
+                tool_events = self.tool_call_tracker.handle_tool_calls_from_stream(message, namespace, task_id)  # type: ignore
                 for event in tool_events:
                     yield event
             if isinstance(message, ToolMessageChunk) or isinstance(message, ToolMessage):  # tc_result
                 # Tool Message = tool_call_id and content
                 node_name, task_id = self._parse_namespace_components(namespace)
-                tool_events = self.tool_call_tracker.process_tool_call_result(message, namespace, task_id)  # type: ignore
+                tool_events = self.tool_call_tracker.handle_tool_execution_result(message, namespace, task_id)  # type: ignore
                 for event in tool_events:
                     yield event
 

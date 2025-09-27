@@ -66,11 +66,11 @@ class MessageChannelHandler:
                         task_id=task_id,
                     )
                 if msg.tool_calls:
-                    events = self.tool_call_tracker.process_full_tool_calls(msg, namespace, task_id)
+                    events = self.tool_call_tracker.handle_tool_calls_from_state(msg, namespace, task_id)
                     for ev in events:
                         yield ev
 
             if isinstance(msg, ToolMessage):
-                events = self.tool_call_tracker.process_tool_call_result(msg, namespace, task_id)
+                events = self.tool_call_tracker.handle_tool_execution_result(msg, namespace, task_id)
                 for ev in events:
                     yield ev
