@@ -7,7 +7,6 @@ Replaces both streaming_service.py and streaming_v2.py with a unified approach
 leveraging the Stream Processor's event-driven architecture.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set

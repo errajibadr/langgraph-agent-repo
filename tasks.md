@@ -15,7 +15,8 @@
 - [x] Initialization complete
 - [x] Planning complete (memory_bank/streamlit_conversational_streaming_plan.md)
 - [x] **Phase 1: Foundation complete**
-- [ ] Phase 2: Chat Integration & UI
+- [x] **Phase 2A: Architectural Design complete**
+- [ ] Phase 2B: Implementation
 - [ ] Phase 3: Advanced Features
 - [ ] Phase 4: Polish & Optimization
 
@@ -79,13 +80,47 @@
 - Contextual tool call display within conversation
 - Speaker avatars and identification
 
+### Phase 2: Chat Integration & UI - ARCHITECTURAL DESIGN ✅ COMPLETE
+
+**Key Accomplishment: Sequential Message Architecture**
+
+#### **🎯 Architectural Decision: Sequential Message Structure** ✅
+- **Documentation**: `memory_bank/conversational_streaming_architecture_v2.md`
+- **Core Principle**: Chronological message array instead of hierarchical speaker groupings
+- **Benefits**: Natural conversation flow, simple rendering, real-time updates
+
+#### **📋 Message Structure Designed** ✅
+```python
+st.session_state.messages = [
+    {"role": "user", "content": "..."},
+    {"id": "msg_1", "namespace": "main", "role": "ai", "content": "..."},
+    {"tool_call_id": "call_1", "role": "tool_call", "name": "think_tool", "status": "result_success"},
+    {"id": "msg_2", "namespace": "analysis_agent:task_123", "role": "ai", "content": "..."},
+    # Sequential, chronological flow matching natural conversation
+]
+```
+
+#### **🔄 Event Processing Strategy** ✅
+- **TokenStreamEvent** → Update existing AI messages by message_id + namespace
+- **ToolCallEvent** → Update tool call entries by tool_call_id
+- **Sequential Flow**: Tools appear inline where they're actually called
+- **Deduplication**: Message ID and Tool Call ID based matching
+
+#### **🎨 Rendering Logic** ✅
+- Simple sequential iteration through message array
+- Speaker identification by namespace
+- Tool call status display (🔧 → 🔍 → ✅)
+- Expandable results for completed tools
+
+**Status**: ✅ **ARCHITECTURAL DESIGN COMPLETE** - Ready for Implementation
+
 ## 🔄 **NEXT STEPS**
 
-### **Phase 2: Chat Integration & UI** 
-- Refactor existing `chat.py` to use ConversationalStreamAdapter
-- Remove commented/dead code from current chat component
-- Clean speaker transition handling in Streamlit
-- Proper session state management integration
+### **Phase 2B: Implementation** 
+- Implement sequential message structure in ConversationalStreamAdapter
+- Update event handlers to populate message array correctly
+- Create sequential conversation renderer
+- Test with simple conversation flows
 
 ### **Phase 3: Advanced Features**
 - Real-time tool call argument streaming display
@@ -121,4 +156,4 @@
 
 ---
 
-**BUILD MODE STATUS**: Phase 1 Complete - Ready to proceed to Phase 2
+**BUILD MODE STATUS**: Phase 2A Complete - Sequential message architecture designed and documented. Ready for Phase 2B Implementation.

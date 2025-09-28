@@ -1,23 +1,28 @@
-"""New chat interface UI component with graph catalog integration."""
+"""Simple conversational chat interface using ConversationalStreamAdapter.
 
+Phase 2: Clean, simple chat that leverages the new conversational streaming architecture
+built in Phase 1. Starts with basic message streaming and builds from there.
+"""
+
+import asyncio
 import uuid
+from typing import Any, Optional
 
 import streamlit as st
-from frontend.services.streaming_v2 import run_async_streaming
-from frontend.types import CreativityLevel
-from frontend.utils.formatting import beautify_tool_name
+from frontend.services.conversational_stream_adapter import ConversationalStreamAdapter
+from frontend.services.stream_processor_integration import (
+    ConversationalStreamProcessor,
+    create_simple_conversational_processor,
+)
 from langchain_core.messages import HumanMessage
-
-from .artifacts_display import render_artifacts
-from .configuration import render_example_configurations
 
 
 def render_chat_interface():
-    """Render the main chat interface with graph catalog support."""
-    # Initialize session if needed
+    """Render the main conversational chat interface."""
+    # Initialize session
     _init_chat_session()
 
-    # Header with clear button
+    # Header
     _render_header()
 
     # Check if we have both a model and a graph
@@ -34,16 +39,13 @@ def render_chat_interface():
             unsafe_allow_html=True,
         )
 
-        # Main chat area
-        _render_chat_area()
+        # Main chat area using conversational streaming
+        _render_conversational_chat()
 
     elif not has_model:
         st.info("👈 Please configure a provider in the sidebar and test the connection to start chatting!")
-        render_example_configurations()
-
     elif not has_graph:
         st.info("👈 Please select an AI agent in the sidebar to start chatting!")
-
     else:
         st.error("Unexpected state - please refresh the page")
 
@@ -52,224 +54,128 @@ def _render_header():
     """Render the header with clear conversation button."""
     col1, col2 = st.columns([4, 1])
     with col1:
-        st.header("💬 Chat Interface")
+        st.header("💬 Conversational AI Chat")
     with col2:
         if st.button("🗑️ Clear", help="Clear conversation history"):
-            st.session_state.messages = []
-            # Generate new thread_id for new conversation
-            st.session_state.thread_id = str(uuid.uuid4())
-            # Clear any persisted seen tool ids to avoid stale filtering
-            if "seen_tool_call_ids" in st.session_state:
-                del st.session_state.seen_tool_call_ids
-            if "seen_tool_result_ids" in st.session_state:
-                del st.session_state.seen_tool_result_ids
+            _clear_conversation()
             st.rerun()
 
 
-def _render_chat_area():
-    """Render the chat messages and input area."""
-    # Display chat history with inline artifact handling
-    for message_idx, message in enumerate(st.session_state.messages):
-        # Handle different message types for natural chat flow
-        if message["role"] in ["user", "assistant"]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+def _render_conversational_chat():
+    """Render the conversational chat using the new streaming architecture."""
 
-                # Handle tool summary with expandable details
-                if message.get("tool_summary") and message.get("tool_executions"):
-                    with st.expander("🔍 View Detailed Tool Results", expanded=False):
-                        for tool_exec in message["tool_executions"]:
-                            # Beautify tool name for display
-                            beautiful_name = beautify_tool_name(tool_exec["name"])
-                            st.markdown(f"**{tool_exec['icon']} {beautiful_name}**")
+    # Display existing chat history (this is handled by Streamlit's chat UI naturally)
+    # The conversational adapter will handle new streaming messages
 
-                            # Show full args
-                            if tool_exec.get("args"):
-                                st.code(str(tool_exec["args"]), language="json")
+    # Display conversation history from session
+    # for message in st.session_state.messages:
+    #     if message["role"] == "user":
+    #         with st.chat_message("user"):
+    #             st.markdown(message["content"])
+    #     elif message["role"] == "assistant":
+    #         with st.chat_message("assistant"):
+    #             st.markdown(message["content"])
 
-                            # Show full result
-                            if tool_exec.get("result"):
-                                # Generate unique key to prevent duplicates
-                                unique_key = f"tool_result_{tool_exec['tool_id']}_{str(uuid.uuid4())[:8]}"
-                                st.text_area(
-                                    f"Full result from {beautiful_name}:",
-                                    str(tool_exec["result"]),
-                                    height=100,
-                                    disabled=True,
-                                    key=unique_key,
-                                )
-
-                            st.markdown("---")
-
-                # Handle artifacts inline with message
-                if "artifacts" in message and message["artifacts"]:
-                    selected_index = render_artifacts(message["artifacts"], key_prefix=f"msg_{message_idx}")
-
-                    if selected_index is not None:
-                        # Process artifact selection as a new user interaction
-                        if 0 <= selected_index < len(message["artifacts"]):
-                            selected_artifact = message["artifacts"][selected_index]
-                            artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
-                            _process_interaction(artifact_content)
-                            st.rerun()
-                            return
-
-        elif message["role"] == "tool_call":
-            # Display tool call as assistant message
-            with st.chat_message("assistant"):
-                st.markdown(message["content"])
-                if message.get("status") == "executing":
-                    with st.spinner(f"Executing {message.get('tool_name', 'tool')}..."):
-                        st.empty()
-
-        elif message["role"] == "tool_result":
-            # Display tool result as assistant message
-            with st.chat_message("assistant"):
-                st.markdown(message["content"])
-
-                # Add expandable section for full result if available
-                if message.get("full_result") and len(str(message["full_result"])) > 200:
-                    with st.expander("View full result", expanded=False):
-                        st.text(str(message["full_result"]))
-
-    # Handle user text input
+    # Handle user input
     if prompt := st.chat_input("What would you like to ask?"):
-        _process_interaction(prompt)
+        # Add user message to history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Stream AI response
+        _stream_conversational_response(prompt)
 
 
-def _process_interaction(content: str):
-    """Unified processing for all user interactions (text input and artifact selections)."""
-    # Clean up old artifacts from previous messages to prevent accumulation
-    _cleanup_old_artifacts()
-
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": content})
-
-    # Display user message
-    with st.chat_message("user"):
-        st.markdown(content)
-
-    # Generate and display assistant response
-    with st.chat_message("assistant"):
-        _stream_graph_response(content)
-
-
-def _stream_graph_response(content: str):
-    """Stream graph response and handle artifacts in a unified way."""
+def _stream_conversational_response(user_input: str):
+    """Stream AI response using the conversational streaming architecture."""
     try:
-        # Check if graph is available
-        if not st.session_state.get("current_graph"):
-            st.error("No agent selected. Please select an agent in the sidebar.")
-            return
+        # Get or create conversational processor
+        if "conversational_processor" not in st.session_state:
+            st.session_state.conversational_processor = create_simple_conversational_processor()
 
-        # Create input state for the graph
-        input_state = {
-            "messages": [HumanMessage(content=content)],
-            "artifacts": [],
-        }
+        processor = st.session_state.conversational_processor
 
-        # Configuration with thread_id and context
+        # Reset processor for new conversation turn
+        processor.reset_session()
+
+        # Prepare graph input
+        input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "iteration": 0}
+
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-        context = {"user_id": st.session_state.user_id, "model": st.session_state.current_model.model_name}
+        # Run streaming in an async context
+        response_content = asyncio.run(_run_streaming_conversation(processor, input_state, config))
 
-        # Use async streaming for all agents with chat flow integration
-        run_async_streaming(st.session_state.current_graph, input_state, config, context)
-
-        # The streaming handler has added all messages to session state
-        # Trigger a rerun to refresh the chat display with permanent history
-        st.rerun()
-
-        # else:
-        #     # Use traditional streaming for other agents
-        #     with st.spinner(f"Processing with {st.session_state.current_graph_info.name}..."):
-        #         response_content = ""
-        #         response_artifacts = []
-
-        #         for chunk in st.session_state.current_graph.stream(
-        #             input_state,
-        #             config=config,
-        #             context=context,
-        #             stream_mode="values",
-        #         ):
-        #             if isinstance(chunk, dict):
-        #                 if "messages" in chunk and chunk["messages"]:
-        #                     latest_message = chunk["messages"][-1]
-        #                     if hasattr(latest_message, "content"):
-        #                         response_content = latest_message.content
-
-        #                 if "artifacts" in chunk and chunk["artifacts"]:
-        #                     response_artifacts = chunk["artifacts"]
-
-        # Display response content and handle artifacts (common for both modes)
-        # if response_content:
-        #     if not is_supervisor:  # Only display if not already shown in async mode
-        #         st.markdown(response_content)
-
-        #     # Create message data with artifacts
-        #     message_id = str(uuid.uuid4())
-        #     message_data = {"role": "assistant", "content": response_content, "message_id": message_id}
-
-        #     # Add artifacts to message if present
-        #     if response_artifacts:
-        #         message_data["artifacts"] = response_artifacts
-
-        #         # Display artifacts immediately in current context
-        #         selected_artifact_id = render_artifacts(response_artifacts, key_prefix=f"current_{message_id}")
-
-        #         # Handle immediate artifact selection
-        #         if selected_artifact_id:
-        #             selected_artifact = next((a for a in response_artifacts if a.id == selected_artifact_id), None)
-        #             if selected_artifact:
-        #                 # Add to chat history first
-        #                 st.session_state.messages.append(message_data)
-
-        #                 # Process artifact selection
-        #                 artifact_content = f"Selected: {selected_artifact.title}. {selected_artifact.description}"
-        #                 _process_interaction(artifact_content)
-        #                 st.rerun()
-        #                 return
-
-        #     # Add to chat history
-        #     st.session_state.messages.append(message_data)
-
-        # else:
-        #     st.warning("No response received from agent.")
+        # Add assistant response to history
+        if response_content:
+            st.session_state.messages.append({"role": "assistant", "content": response_content})
+            print(len(st.session_state.messages))
 
     except Exception as e:
-        st.error(f"Error generating response: {str(e)}")
+        st.error(f"Error in conversational streaming: {str(e)}")
         st.exception(e)
+
+
+async def _run_streaming_conversation(
+    processor: ConversationalStreamProcessor, input_state: dict[str, Any], config: dict[str, Any]
+) -> Optional[str]:
+    """Run the conversational streaming process."""
+    try:
+        graph = st.session_state.current_graph
+
+        # Container for collecting response
+        response_content = ""
+
+        # Process streaming events
+        async for event in processor.stream_with_conversation(graph, input_state, config):
+            # The processor already handles conversational adapter processing internally
+
+            # Collect response content for session state
+            if hasattr(event, "accumulated_content") and event.accumulated_content:
+                response_content = event.accumulated_content
+
+        return response_content
+
+    except Exception as e:
+        st.error(f"Error during streaming: {str(e)}")
+        return None
 
 
 def _init_chat_session():
     """Initialize chat session state."""
     if "thread_id" not in st.session_state:
         st.session_state.thread_id = str(uuid.uuid4())
-        st.session_state.user_id = str("h88214")
+        st.session_state.user_id = "demo_user"
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-
-def _cleanup_old_artifacts():
-    """Clean up old artifacts from previous messages to prevent UI conflicts."""
-    for message in st.session_state.messages:
-        if "artifacts" in message and message["artifacts"]:
-            # Convert artifacts to text summary and remove the interactive artifacts
-            artifact_summary = []
-            for artifact in message["artifacts"]:
-                artifact_summary.append(f"• {artifact.title}: {artifact.description}")
-
-            # Add artifact summary to the message content if not already there
-            if artifact_summary and "Available options were:" not in message["content"]:
-                message["content"] += "\n\n**Available options were:**\n" + "\n".join(artifact_summary)
-
-            # Remove the interactive artifacts
-            del message["artifacts"]
+    if "conversational_processor" not in st.session_state:
+        st.session_state.conversational_processor = create_simple_conversational_processor()
 
 
-def _get_current_temperature() -> float:
-    """Get current temperature from creativity selection."""
-    selected_creativity = st.session_state.get("creativity_select", CreativityLevel.MEDIUM.value)
-    creativity_level = CreativityLevel.from_string(selected_creativity)
-    return creativity_level.temperature
+def _clear_conversation():
+    """Clear the conversation and reset session."""
+    st.session_state.messages = []
+    st.session_state.thread_id = str(uuid.uuid4())
+
+    # Reset conversational processor
+    if "conversational_processor" in st.session_state:
+        st.session_state.conversational_processor.reset_session()
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
