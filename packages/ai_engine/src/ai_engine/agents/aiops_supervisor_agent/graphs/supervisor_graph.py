@@ -13,7 +13,8 @@ from ai_engine.agents.aiops_supervisor_agent.tools.agent_tools import call_inspe
 from ai_engine.agents.base.utils import get_user_context
 from ai_engine.models.custom_chat_model import create_chat_model
 from ai_engine.tools.reflection_tool import think_tool
-from ai_engine.utils.streaming_parser import create_console_parser
+
+# from ai_engine.utils.streaming_parser import create_console_parser
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph, RunnableConfig
@@ -210,7 +211,7 @@ async def main():
     config = {"configurable": {"thread_id": "thread-1"}}
 
     # Create streaming parser with console output
-    parser = create_console_parser()
+    # parser = create_console_parser()
 
     print("🚀 Starting Supervisor Agent with Streaming Parser")
     print("=" * 60)
@@ -225,16 +226,18 @@ async def main():
             chunk_messages, config = chunk
             # Process the chunk through our streaming parser if it's a BaseMessage
             if isinstance(chunk_messages, BaseMessage):
-                parser.process_chunk(chunk_messages)
+                pass
+    #             parser.process_chunk(chunk_messages)
 
-    print("\n" + "=" * 60)
-    print("🏁 Streaming Complete!")
-    print(f"Final state: {parser.get_current_state()}")
-    print(f"Final tool calls: {parser.get_final_tool_calls()}")
+    # print("\n" + "=" * 60)
+    # print("🏁 Streaming Complete!")
+    # print(f"Final state: {parser.get_current_state()}")
+    # print(f"Final tool calls: {parser.get_final_tool_calls()}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+    ##
     ##
     ##
     ##

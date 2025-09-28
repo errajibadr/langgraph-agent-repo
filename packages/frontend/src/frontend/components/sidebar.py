@@ -6,7 +6,6 @@ from typing import Optional, Tuple
 import streamlit as st
 from core.config import ProviderFactory
 from core.types import ProviderType
-
 from frontend.services.api import fetch_models_from_api
 from frontend.services.model import auto_connect_model
 

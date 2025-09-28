@@ -12,7 +12,8 @@ from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_
 from ai_engine.agents.aiops_supervisor_agent.states import SupervisorContext, SupervisorState
 from ai_engine.agents.base.states.context import BaseContext
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
-from ai_engine.utils.streaming_parser import create_console_parser
+
+# from ai_engine.utils.streaming_parser import create_console_parser
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -81,7 +82,7 @@ async def main():
     config = {"configurable": {"thread_id": "thread-1"}}
 
     # Create streaming parser with console output
-    parser = create_console_parser()
+    # parser = create_console_parser()
 
     print("🚀 Starting Supervisor Agent with Streaming Parser")
     print("=" * 60)
@@ -96,23 +97,15 @@ async def main():
             chunk_messages, config = chunk
             # Process the chunk through our streaming parser if it's a BaseMessage
             if isinstance(chunk_messages, BaseMessage):
-                parser.process_chunk(chunk_messages)
+                pass
+                # parser.process_chunk(chunk_messages)
 
-    print("\n" + "=" * 60)
-    print("🏁 Streaming Complete!")
-    print(f"Final state: {parser.get_current_state()}")
-    print(f"Final tool calls: {parser.get_final_tool_calls()}")
+    # print("\n" + "=" * 60)
+    # print("🏁 Streaming Complete!")
+    # print(f"Final state: {parser.get_current_state()}")
+    # print(f"Final tool calls: {parser.get_final_tool_calls()}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
-    asyncio.run(main())
+    #
