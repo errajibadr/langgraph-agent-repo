@@ -56,13 +56,14 @@ class MessageChannelHandler:
                 if msg.content and not was_streamed:
                     # Emit message receipt for UI/telemetry
                     yield MessageReceivedEvent(
+                        message_id=msg_id or "",
                         namespace=namespace,
                         message=msg,
                         was_streamed=was_streamed,
                         has_tool_calls=bool(getattr(msg, "tool_calls", [])),
                         tool_call_ids=[tc.get("id", "") for tc in getattr(msg, "tool_calls", []) if tc.get("id")],
                         source="channel",
-                        message_type=msg.type if isinstance(msg, AIMessage) else "human",
+                        message_type=msg.type if isinstance(msg, AIMessage) else "user",
                         task_id=task_id,
                     )
                 if isinstance(msg, AIMessage) and msg.tool_calls:

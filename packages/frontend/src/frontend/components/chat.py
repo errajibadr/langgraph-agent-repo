@@ -129,7 +129,7 @@ def _render_ai_message(message):
     with st.chat_message("assistant", avatar=avatar):
         # Speaker identification (if not main AI)
         if speaker != "AI":
-            st.caption(f"🤖 {speaker}")
+            st.caption(f"🤖 {speaker} !")
 
         # Message content
         st.markdown(message["content"])
@@ -147,10 +147,15 @@ def _render_tool_call(message):
 
     # Expandable result for completed tools with results
     if message["status"] == "result_success" and message.get("result"):
-        result_text = str(message["result"])
+        result_content = message["result"]["content"]
+        result_text = str(result_content)
+
         if len(result_text) > 100:  # Show in expander for long results
             with st.expander(f"View {message['name']} full result", expanded=False):
-                st.text(result_text)
+                if isinstance(result_content, dict) or isinstance(result_content, list):
+                    st.json(result_content)
+                else:
+                    st.text(result_text)
         else:
             # Show short results inline
             st.caption(f"Result: {result_text}")
@@ -200,7 +205,7 @@ def _stream_conversational_response(user_input: str):
         processor.reset_session()
 
         # Prepare graph input
-        input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "iteration": 0}
+        input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
 
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
@@ -346,6 +351,21 @@ def _add_test_messages():
     st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
     st.rerun()
 
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     #
     #
     #

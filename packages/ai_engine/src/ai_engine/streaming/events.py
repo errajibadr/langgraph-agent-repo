@@ -78,6 +78,7 @@ class MessageReceivedEvent(StreamEvent):
     indicate if this message was already processed via token streaming.
     """
 
+    message_id: str
     message: BaseMessage  # The complete message
     was_streamed: bool  # True if already processed via token streaming
     has_tool_calls: bool  # Whether message contains tool calls

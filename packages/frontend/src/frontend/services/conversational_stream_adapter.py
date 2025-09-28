@@ -13,7 +13,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 import streamlit as st
-from ai_engine.streaming.events import ArtifactEvent, ChannelValueEvent, StreamEvent, TokenStreamEvent, ToolCallEvent
+from ai_engine.streaming.events import (
+    ArtifactEvent,
+    ChannelValueEvent,
+    MessageReceivedEvent,
+    StreamEvent,
+    TokenStreamEvent,
+    ToolCallEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +70,8 @@ class ConversationalStreamAdapter:
         # Route event to appropriate handler
         if isinstance(event, TokenStreamEvent):
             await self.handle_conversational_streaming(event)
+        elif isinstance(event, MessageReceivedEvent):
+            await self.handle_conversational_message_received(event)
         elif isinstance(event, ToolCallEvent):
             await self.handle_conversational_tool_call(event)
         elif isinstance(event, ChannelValueEvent):
@@ -92,6 +101,27 @@ class ConversationalStreamAdapter:
                 "namespace": event.namespace,
                 "role": "ai",
                 "content": event.accumulated_content,
+                "timestamp": datetime.now().isoformat(),
+            }
+            st.session_state.messages.append(new_message)
+            logger.debug(f"Created new message {event.message_id} in namespace {event.namespace}")
+
+    async def handle_conversational_message_received(self, event: MessageReceivedEvent):
+        """Update or create message entry in session state."""
+        # Find existing message in session state
+        existing_msg = self._find_message_in_session_state(event.id, event.namespace)
+
+        if existing_msg:
+            # Update existing message content (token streaming)
+            existing_msg["content"] = event.message.content
+            logger.debug(f"Updated message {event.message_id} in namespace {event.namespace}")
+        else:
+            # Create new message in session state
+            new_message = {
+                "id": event.message_id,
+                "namespace": event.namespace,
+                "role": event.message_type,
+                "content": event.message.content,
                 "timestamp": datetime.now().isoformat(),
             }
             st.session_state.messages.append(new_message)
@@ -171,7 +201,7 @@ class ConversationalStreamAdapter:
     def _find_message_in_session_state(self, message_id: str, namespace: str) -> Optional[Dict[str, Any]]:
         """Find existing AI message in session state."""
         for msg in st.session_state.messages:
-            if msg.get("id") == message_id and msg.get("namespace") == namespace and msg.get("role") == "ai":
+            if msg.get("id") == message_id:
                 return msg
         return None
 
@@ -270,6 +300,13 @@ async def example_sequential_streaming():
     # Show current message state
     if st.button("Show Message State"):
         summary = adapter.get_conversation_summary()
+        st.json(summary)
+
+    # Reset session
+    if st.button("Reset Session"):
+        adapter.reset_session()
+        st.success("Session reset - messages cleared")
+        st.rerun()
         st.json(summary)
 
     # Reset session
