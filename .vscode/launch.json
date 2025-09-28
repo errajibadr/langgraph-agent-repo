@@ -7,6 +7,14 @@
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: Streamlit",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "${workspaceFolder}/packages/frontend/src/frontend/app.py", "--server.headless=true", "--server.port=8501"],
+      "console": "integratedTerminal"
     }
   ]
 }

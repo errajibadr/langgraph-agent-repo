@@ -9,7 +9,11 @@ import uuid
 from typing import Any, Optional
 
 import streamlit as st
-from frontend.services.conversational_stream_adapter import ConversationalStreamAdapter
+from frontend.services.conversational_stream_adapter import (
+    get_avatar,
+    get_speaker_for_namespace,
+    get_tool_status_display,
+)
 from frontend.services.stream_processor_integration import (
     ConversationalStreamProcessor,
     create_simple_conversational_processor,
@@ -49,6 +53,22 @@ def render_chat_interface():
     else:
         st.error("Unexpected state - please refresh the page")
 
+    # Add debug section in development
+    with st.expander("🔧 Development Debug Tools", expanded=False):
+        _show_debug_info()
+
+        if st.button("🧪 Add Test Messages"):
+            _add_test_messages()
+
+        st.subheader("Message Architecture V2 Info")
+        st.info("""
+        **Architecture V2: Sequential Message Flow**
+        - Data Layer: ConversationalStreamAdapter updates st.session_state.messages
+        - UI Layer: Chat Component renders messages chronologically  
+        - Message types: user, ai, tool_call, artifact
+        - Real-time: Adapter updates session state during streaming
+        """)
+
 
 def _render_header():
     """Render the header with clear conversation button."""
@@ -62,31 +82,109 @@ def _render_header():
 
 
 def _render_conversational_chat():
-    """Render the conversational chat using the new streaming architecture."""
+    """Render conversation from st.session_state.messages in chronological order."""
 
-    # Display existing chat history (this is handled by Streamlit's chat UI naturally)
-    # The conversational adapter will handle new streaming messages
+    # Display all historical messages from session state
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            _render_user_message(message)
+        elif message["role"] == "ai":
+            _render_ai_message(message)
+        elif message["role"] == "tool_call":
+            _render_tool_call(message)
+        elif message["role"] == "artifact":
+            _render_artifact_message(message)
 
-    # Display conversation history from session
-    # for message in st.session_state.messages:
-    #     if message["role"] == "user":
-    #         with st.chat_message("user"):
-    #             st.markdown(message["content"])
-    #     elif message["role"] == "assistant":
-    #         with st.chat_message("assistant"):
-    #             st.markdown(message["content"])
-
-    # Handle user input
+    # Handle new user input
     if prompt := st.chat_input("What would you like to ask?"):
-        # Add user message to history
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        # Add user message to session state
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+                "timestamp": str(uuid.uuid4()),  # Simple ID for user messages
+            }
+        )
 
-        # Display user message
+        # Display user message immediately
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Stream AI response
+        # Start streaming (adapter will update session state)
         _stream_conversational_response(prompt)
+
+
+def _render_user_message(message):
+    """Render user message."""
+    with st.chat_message("user"):
+        st.markdown(message["content"])
+
+
+def _render_ai_message(message):
+    """Render AI message with proper speaker identification."""
+    # Determine speaker and avatar from namespace
+    speaker = get_speaker_for_namespace(message.get("namespace", "main"))
+    avatar = get_avatar(speaker)
+
+    with st.chat_message("assistant", avatar=avatar):
+        # Speaker identification (if not main AI)
+        if speaker != "AI":
+            st.caption(f"🤖 {speaker}")
+
+        # Message content
+        st.markdown(message["content"])
+
+        # Display artifacts if present
+        if "artifacts" in message and message["artifacts"]:
+            _render_inline_artifacts(message["artifacts"])
+
+
+def _render_tool_call(message):
+    """Render tool call as inline work indicator."""
+    # Tool status display
+    tool_display = get_tool_status_display(message)
+    st.caption(tool_display)
+
+    # Expandable result for completed tools with results
+    if message["status"] == "result_success" and message.get("result"):
+        result_text = str(message["result"])
+        if len(result_text) > 100:  # Show in expander for long results
+            with st.expander(f"View {message['name']} full result", expanded=False):
+                st.text(result_text)
+        else:
+            # Show short results inline
+            st.caption(f"Result: {result_text}")
+
+    # Show error details for failed tools
+    elif message["status"] == "result_error" and message.get("result"):
+        with st.expander(f"Error details for {message['name']}", expanded=False):
+            st.error(str(message["result"]))
+
+
+def _render_artifact_message(message):
+    """Render standalone artifact message."""
+    # Determine speaker from namespace
+    speaker = get_speaker_for_namespace(message.get("namespace", "main"))
+    avatar = get_avatar(speaker)
+
+    with st.chat_message("assistant", avatar=avatar):
+        if speaker != "AI":
+            st.caption(f"🤖 {speaker}")
+
+        st.info(f"📋 Created {message['artifact_type']}")
+        # Could expand this to show artifact content based on type
+        if st.button(f"View {message['artifact_type']}", key=f"artifact_{message.get('timestamp', 'unknown')}"):
+            st.json(message["artifact_data"])
+
+
+def _render_inline_artifacts(artifacts):
+    """Render artifacts inline with AI message."""
+    with st.expander(f"📋 {len(artifacts)} Artifact(s)", expanded=False):
+        for i, artifact in enumerate(artifacts):
+            st.subheader(f"📋 {artifact['type']}")
+            st.json(artifact["data"])
+            if i < len(artifacts) - 1:
+                st.divider()
 
 
 def _stream_conversational_response(user_input: str):
@@ -107,12 +205,11 @@ def _stream_conversational_response(user_input: str):
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
         # Run streaming in an async context
-        response_content = asyncio.run(_run_streaming_conversation(processor, input_state, config))
+        asyncio.run(_run_streaming_conversation(processor, input_state, config))
 
-        # Add assistant response to history
-        if response_content:
-            st.session_state.messages.append({"role": "assistant", "content": response_content})
-            print(len(st.session_state.messages))
+        # After streaming completes, trigger rerun to show final state
+        # The adapter has already updated st.session_state.messages during streaming
+        st.rerun()
 
     except Exception as e:
         st.error(f"Error in conversational streaming: {str(e)}")
@@ -126,18 +223,9 @@ async def _run_streaming_conversation(
     try:
         graph = st.session_state.current_graph
 
-        # Container for collecting response
-        response_content = ""
-
         # Process streaming events
         async for event in processor.stream_with_conversation(graph, input_state, config):
-            # The processor already handles conversational adapter processing internally
-
-            # Collect response content for session state
-            if hasattr(event, "accumulated_content") and event.accumulated_content:
-                response_content = event.accumulated_content
-
-        return response_content
+            pass
 
     except Exception as e:
         st.error(f"Error during streaming: {str(e)}")
@@ -165,17 +253,101 @@ def _clear_conversation():
     # Reset conversational processor
     if "conversational_processor" in st.session_state:
         st.session_state.conversational_processor.reset_session()
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        #
+
+
+# Debugging utilities
+def _show_debug_info():
+    """Show debug information about current conversation state."""
+    if st.button("🔍 Debug: Show Message State"):
+        st.subheader("Current Message State")
+        st.json(st.session_state.messages)
+
+        if "conversational_processor" in st.session_state:
+            adapter = st.session_state.conversational_processor.get_adapter()
+            summary = adapter.get_conversation_summary()
+            st.subheader("Conversation Summary")
+            st.json(summary)
+
+
+def _add_test_messages():
+    """Add test messages to verify the rendering works correctly."""
+    test_messages = [
+        {
+            "role": "user",
+            "content": "Analyze this data and create a comprehensive report",
+            "timestamp": "2024-01-01T10:00:00",
+        },
+        {
+            "id": "msg_2",
+            "namespace": "main",
+            "role": "ai",
+            "content": "I'll help you analyze the data and create a comprehensive report for you...",
+            "timestamp": "2024-01-01T10:00:01",
+        },
+        {
+            "namespace": "main",
+            "message_id": "msg_2",
+            "tool_call_id": "call_123",
+            "role": "tool_call",
+            "name": "think_tool",
+            "status": "result_success",
+            "args": {"reflection": "The user is asking me to analyze data..."},
+            "result": "Reflection complete - proceeding with analysis",
+            "timestamp": "2024-01-01T10:00:02",
+        },
+        {
+            "namespace": "main",
+            "message_id": "msg_2",
+            "tool_call_id": "call_456",
+            "role": "tool_call",
+            "name": "analysis_agent",
+            "status": "args_streaming",
+            "args": None,
+            "result": None,
+            "timestamp": "2024-01-01T10:00:03",
+        },
+        {
+            "id": "msg_3",
+            "namespace": "analysis_agent:task_123",
+            "role": "ai",
+            "content": "Analyzing the data now... I've found several interesting patterns in the data. Analysis complete! Key findings: correlation coefficient 0.85, 3 main clusters identified.",
+            "timestamp": "2024-01-01T10:00:04",
+        },
+        {
+            "namespace": "analysis_agent:task_123",
+            "message_id": "msg_3",
+            "tool_call_id": "call_789",
+            "role": "tool_call",
+            "name": "data_processor",
+            "status": "result_success",
+            "args": {"query": "deep analysis"},
+            "result": "covariance: 12.5, variance: 8.2, trends: upward",
+            "timestamp": "2024-01-01T10:00:05",
+        },
+        {
+            "id": "msg_4",
+            "namespace": "main",
+            "role": "ai",
+            "content": "Here's your comprehensive analysis based on the detailed processing: The data shows strong correlation (0.85) with 3 distinct clusters and an upward trend. Covariance of 12.5 indicates significant relationships between variables.",
+            "artifacts": [
+                {
+                    "type": "AnalysisReport",
+                    "data": {"correlation": 0.85, "clusters": 3, "trend": "upward"},
+                    "namespace": "main",
+                    "timestamp": "2024-01-01T10:00:06",
+                }
+            ],
+            "timestamp": "2024-01-01T10:00:06",
+        },
+    ]
+
+    # Add test messages to session state
+    st.session_state.messages.extend(test_messages)
+    st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
+    st.rerun()
+
+    #
+    #
+    #
+    #
+    #

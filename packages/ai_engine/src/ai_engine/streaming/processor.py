@@ -201,6 +201,7 @@ class ChannelStreamingProcessor:
     ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process message chunks for token-by-token streaming."""
         message, metadata = chunk
+        node_name, task_id = self._parse_namespace_components(namespace)
 
         # Check if this namespace should stream tokens
         if not self._should_stream_tokens_from_namespace(namespace):
@@ -227,20 +228,17 @@ class ChannelStreamingProcessor:
             if isinstance(message, AIMessageChunk) and (
                 message.tool_calls or message.tool_call_chunks
             ):  # is a tool call
-                node_name, task_id = self._parse_namespace_components(namespace)
                 tool_events = self.tool_call_tracker.handle_tool_calls_from_stream(message, namespace, task_id)  # type: ignore
                 for event in tool_events:
                     yield event
             if isinstance(message, ToolMessageChunk) or isinstance(message, ToolMessage):  # tc_result
                 # Tool Message = tool_call_id and content
-                node_name, task_id = self._parse_namespace_components(namespace)
                 tool_events = self.tool_call_tracker.handle_tool_execution_result(message, namespace, task_id)  # type: ignore
                 for event in tool_events:
                     yield event
 
         # Handle regular content streaming for AIMessageChunk only
-        if isinstance(message, AIMessageChunk) and hasattr(message, "content") and message.content is not None:
-            node_name, task_id = self._parse_namespace_components(namespace)
+        if isinstance(message, AIMessageChunk) and message.content:
             accumulator_key = f"{namespace}:{task_id or 'default'}"
 
             # Accumulate content
@@ -255,7 +253,7 @@ class ChannelStreamingProcessor:
                 namespace=namespace,
                 content_delta=content_delta,
                 accumulated_content=self._message_accumulators[accumulator_key],
-                message_id=getattr(message, "id", None),
+                message_id=msg_id,
                 task_id=task_id,
                 node_name=node_name,
                 message=message,

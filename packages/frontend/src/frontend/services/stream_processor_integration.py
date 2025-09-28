@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class ConversationalStreamProcessor:
     """Processor that integrates Stream Processor with Conversational Adapter."""
 
+    _ENABLED_NAMESPACES = {"main"}
+
     def __init__(
         self,
         enabled_namespaces: Optional[Set[str]] = None,
@@ -34,17 +36,7 @@ class ConversationalStreamProcessor:
             include_tool_calls: Whether to enable tool call streaming
             include_artifacts: Whether to monitor artifact channels
         """
-        self.enabled_namespaces = enabled_namespaces or {
-            "main",
-            "messages",
-            "analysis_agent",
-            "research_agent",
-            "deep_research_agent",
-            "report_generator",
-            "clarify_agent",
-            "aiops_supervisor_agent",
-            "aiops_deepsearch_agent",
-        }
+        self.enabled_namespaces = enabled_namespaces or self._ENABLED_NAMESPACES
 
         # Configure channels for monitoring
         channels = [
@@ -135,13 +127,13 @@ def create_conversational_processor(
     """
     # Convert agent names to namespace format if provided
     if agent_names:
-        enabled_namespaces = {"main", "messages"}
+        enabled_namespaces = {"main"}
         for agent_name in agent_names:
             # Convert from display names to namespace format
             namespace = agent_name.lower().replace(" ", "_")
             enabled_namespaces.add(namespace)
     else:
-        enabled_namespaces = None  # Use defaults
+        enabled_namespaces = {"main"}  # Use defaults
 
     processor = ConversationalStreamProcessor(
         enabled_namespaces=enabled_namespaces,
@@ -149,9 +141,7 @@ def create_conversational_processor(
         include_artifacts=include_artifacts,
     )
 
-    # Initialize the adapter's UI containers
-    processor.adapter.initialize_ui_containers()
-
+    # Note: No UI initialization needed - adapter is now a pure data layer
     return processor
 
 
@@ -161,39 +151,3 @@ def create_simple_conversational_processor() -> ConversationalStreamProcessor:
     return create_conversational_processor(
         agent_names=["Analysis Agent", "Research Agent"], include_tool_calls=True, include_artifacts=False
     )
-
-
-def create_full_conversational_processor() -> ConversationalStreamProcessor:
-    """Create a full-featured processor for complex multi-agent conversations."""
-    return create_conversational_processor(
-        agent_names=[
-            "Deep Research Agent",
-            "Aiops Supervisor Agent",
-            "Aiops Deepsearch Agent",
-            "Report Generator",
-            "Clarify Agent",
-        ],
-        include_tool_calls=True,
-        include_artifacts=True,
-    )
-
-
-def create_custom_conversational_processor(
-    namespaces: Set[str], include_tool_calls: bool = True, include_artifacts: bool = True
-) -> ConversationalStreamProcessor:
-    """Create a custom processor with specific namespace configuration.
-
-    Args:
-        namespaces: Exact set of namespaces to enable streaming for
-        include_tool_calls: Whether to enable tool call streaming
-        include_artifacts: Whether to monitor artifact channels
-
-    Returns:
-        Configured ConversationalStreamProcessor instance
-    """
-    processor = ConversationalStreamProcessor(
-        enabled_namespaces=namespaces, include_tool_calls=include_tool_calls, include_artifacts=include_artifacts
-    )
-
-    processor.adapter.initialize_ui_containers()
-    return processor

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from .events import MessageReceivedEvent, StreamEvent, ToolCallEvent
 from .tool_calls import ToolCallTracker
@@ -51,7 +51,7 @@ class MessageChannelHandler:
             _, task_id = self.parse_namespace_components(namespace)
 
             # Tool call lifecycle integration
-            if isinstance(msg, AIMessage):
+            if isinstance(msg, AIMessage) or isinstance(msg, HumanMessage):
                 ## If we already sent this message ( probably via token by token )
                 if msg.content and not was_streamed:
                     # Emit message receipt for UI/telemetry
@@ -62,10 +62,10 @@ class MessageChannelHandler:
                         has_tool_calls=bool(getattr(msg, "tool_calls", [])),
                         tool_call_ids=[tc.get("id", "") for tc in getattr(msg, "tool_calls", []) if tc.get("id")],
                         source="channel",
-                        message_type=msg.type,
+                        message_type=msg.type if isinstance(msg, AIMessage) else "human",
                         task_id=task_id,
                     )
-                if msg.tool_calls:
+                if isinstance(msg, AIMessage) and msg.tool_calls:
                     events = self.tool_call_tracker.handle_tool_calls_from_state(msg, namespace, task_id)
                     for ev in events:
                         yield ev
