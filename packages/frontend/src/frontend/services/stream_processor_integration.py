@@ -143,11 +143,3 @@ def create_conversational_processor(
 
     # Note: No UI initialization needed - adapter is now a pure data layer
     return processor
-
-
-# Convenience configurations for different use cases
-def create_simple_conversational_processor() -> ConversationalStreamProcessor:
-    """Create a simple processor for basic conversational streaming."""
-    return create_conversational_processor(
-        agent_names=["Analysis Agent", "Research Agent"], include_tool_calls=True, include_artifacts=False
-    )

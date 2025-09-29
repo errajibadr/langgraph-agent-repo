@@ -8,11 +8,10 @@ import uuid
 
 import streamlit as st
 from frontend.services.conversational_stream_adapter import (
-    get_avatar,
-    get_speaker_for_namespace,
-    get_tool_status_display,
-)
-from frontend.services.stream_processor_integration import create_simple_conversational_processor
+    get_avatar, get_speaker_for_namespace, get_tool_status_display)
+from frontend.services.stream_processor_integration import \
+    create_conversational_processor
+from frontend.utils.debug_utils import add_test_messages, show_debug_info
 from langchain_core.messages import HumanMessage
 
 
@@ -50,10 +49,10 @@ def render_chat_interface():
 
     # Add debug section in development
     with st.expander("🔧 Development Debug Tools", expanded=False):
-        _show_debug_info()
+        show_debug_info()
 
         if st.button("🧪 Add Test Messages"):
-            _add_test_messages()
+            add_test_messages()
 
         st.subheader("Message Architecture V2 Info")
         st.info("""
@@ -184,13 +183,9 @@ def _stream_conversational_response(user_input: str):
     import asyncio
 
     try:
-        # Initialize live container area once (placeholder)
-        # if not st.session_state.live_container:
-        #     st.session_state.live_container = st.empty()
-
         # Get or create conversational processor
         if "conversational_processor" not in st.session_state:
-            st.session_state.conversational_processor = create_simple_conversational_processor()
+            st.session_state.conversational_processor = create_conversational_processor()
 
         processor = st.session_state.conversational_processor
 
@@ -198,7 +193,6 @@ def _stream_conversational_response(user_input: str):
         adapter = processor.get_adapter()
         adapter.set_container_update_callback(_update_live_containers)
 
-        # Prepare graph input
         input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
@@ -213,8 +207,7 @@ def _stream_conversational_response(user_input: str):
             # Run the streaming
             asyncio.run(process_live_events())
 
-        # Finalize: transfer to history and cleanup
-        _finalize_conversation()
+        _finalize_run_live_streaming()
 
     except Exception as e:
         st.error(f"Error in live container streaming: {str(e)}")
@@ -234,18 +227,11 @@ def _init_chat_session():
     if "live_chat" not in st.session_state:
         st.session_state.live_chat = []  # Current live conversation (same structure as chat_history)
 
-    if "live_container" not in st.session_state:
-        st.session_state.live_container = None  # Main live container
-
     if "live_speakers" not in st.session_state:
         st.session_state.live_speakers = {}  # namespace -> container mapping
 
-    # Legacy - keep for backward compatibility during transition
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
     if "conversational_processor" not in st.session_state:
-        st.session_state.conversational_processor = create_simple_conversational_processor()
+        st.session_state.conversational_processor = create_conversational_processor()
 
 
 # Live Container Management Functions
@@ -257,7 +243,6 @@ def _update_live_containers():
     # Clear all existing containers first (fresh render)
     _clear_live_containers()
 
-    current_namespace = None
     current_container = None
 
     # Process messages chronologically (preserves conversation order)
@@ -265,13 +250,10 @@ def _update_live_containers():
     for message in st.session_state.live_chat:
         message_namespace = message.get("namespace", "main")
 
-        # Check if we need to switch containers (new namespace detected)
-        if message_namespace != current_namespace:
-            current_namespace = message_namespace
-            current_container = _get_or_create_namespace_container(message_namespace)
+        current_container = _get_or_create_namespace_container(message_namespace)
 
-        # Render message in current container
-        _render_message_in_container(message, current_container)
+        with current_container:
+            _render_messages(message)
 
 
 def _get_or_create_namespace_container(namespace):
@@ -294,59 +276,11 @@ def _get_or_create_namespace_container(namespace):
 def _clear_live_containers():
     """Clear all live containers."""
 
-    if "live_container" in st.session_state and st.session_state.live_container:
-        st.session_state.live_container = st.empty()
-
     if "live_speakers" in st.session_state and st.session_state.live_speakers:
         st.session_state.live_speakers = {}
 
-    # Keep mapping to reuse placeholders; callers can reset if needed
 
-
-def _render_message_in_container(message, container):
-    """Route message to appropriate render function with container."""
-
-    with container:
-        if message["role"] == "user":
-            _render_user_message(message)
-        elif message["role"] == "ai":
-            # Render AI message with speaker identification
-            speaker = get_speaker_for_namespace(message.get("namespace", "main"))
-            if speaker != "AI":
-                st.caption(f"🤖 {speaker}")
-            st.markdown(message["content"])
-            if "artifacts" in message and message["artifacts"]:
-                _render_inline_artifacts(message["artifacts"])
-        elif message["role"] == "tool_call":
-            # Render tool call status
-            tool_display = get_tool_status_display(message)
-            st.caption(tool_display)
-            # Handle tool results
-            if message["status"] == "result_success" and message.get("result"):
-                result_content = (
-                    message["result"]["content"]
-                    if isinstance(message["result"], dict) and "content" in message["result"]
-                    else message["result"]
-                )
-                result_text = str(result_content)
-                if len(result_text) > 100:
-                    with st.expander(f"{message['name']}: {result_text[:25]}...", expanded=False):
-                        if isinstance(result_content, (dict, list)):
-                            st.json(result_content)
-                        else:
-                            st.text(result_text)
-                else:
-                    st.caption(f"Result: {result_text}")
-        elif message["role"] == "artifact":
-            speaker = get_speaker_for_namespace(message.get("namespace", "main"))
-            if speaker != "AI":
-                st.caption(f"🤖 {speaker}")
-            st.info(f"📋 Created {message['artifact_type']}")
-            if st.button(f"View {message['artifact_type']}", key=f"artifact_{message.get('timestamp', 'unknown')}"):
-                st.json(message["artifact_data"])
-
-
-def _finalize_conversation():
+def _finalize_run_live_streaming():
     """Transfer live_chat to chat_history and cleanup live containers."""
 
     # Transfer live conversation to history
@@ -354,14 +288,6 @@ def _finalize_conversation():
 
     # Clear live state
     st.session_state.live_chat = []
-
-    # Clear live containers
-    if st.session_state.live_container:
-        st.session_state.live_container = st.empty()
-
-    for container in st.session_state.live_speakers.values():
-        container.empty()
-
     st.session_state.live_speakers = {}
 
     # Rerun to show final history
@@ -382,188 +308,6 @@ def _clear_conversation():
     if "conversational_processor" in st.session_state:
         st.session_state.conversational_processor.reset_session()
 
-
-# Debugging utilities
-def _show_debug_info():
-    """Show debug information about current conversation state."""
-    if st.button("🔍 Debug: Show Message State"):
-        st.subheader("Current Message State")
-        st.json(st.session_state.messages)
-
-        if "conversational_processor" in st.session_state:
-            adapter = st.session_state.conversational_processor.get_adapter()
-            summary = adapter.get_conversation_summary()
-            st.subheader("Conversation Summary")
-            st.json(summary)
-
-
-def _add_test_messages():
-    """Add test messages to verify the rendering works correctly."""
-    test_messages = [
-        {
-            "role": "user",
-            "content": "Analyze this data and create a comprehensive report",
-            "timestamp": "2024-01-01T10:00:00",
-        },
-        {
-            "id": "msg_2",
-            "namespace": "main",
-            "role": "ai",
-            "content": "I'll help you analyze the data and create a comprehensive report for you...",
-            "timestamp": "2024-01-01T10:00:01",
-        },
-        {
-            "namespace": "main",
-            "message_id": "msg_2",
-            "tool_call_id": "call_123",
-            "role": "tool_call",
-            "name": "think_tool",
-            "status": "result_success",
-            "args": {"reflection": "The user is asking me to analyze data..."},
-            "result": "Reflection complete - proceeding with analysis",
-            "timestamp": "2024-01-01T10:00:02",
-        },
-        {
-            "namespace": "main",
-            "message_id": "msg_2",
-            "tool_call_id": "call_456",
-            "role": "tool_call",
-            "name": "analysis_agent",
-            "status": "args_streaming",
-            "args": None,
-            "result": None,
-            "timestamp": "2024-01-01T10:00:03",
-        },
-        {
-            "id": "msg_3",
-            "namespace": "analysis_agent:task_123",
-            "role": "ai",
-            "content": "Analyzing the data now... I've found several interesting patterns in the data. Analysis complete! Key findings: correlation coefficient 0.85, 3 main clusters identified.",
-            "timestamp": "2024-01-01T10:00:04",
-        },
-        {
-            "namespace": "analysis_agent:task_123",
-            "message_id": "msg_3",
-            "tool_call_id": "call_789",
-            "role": "tool_call",
-            "name": "data_processor",
-            "status": "result_success",
-            "args": {"query": "deep analysis"},
-            "result": "covariance: 12.5, variance: 8.2, trends: upward",
-            "timestamp": "2024-01-01T10:00:05",
-        },
-        {
-            "id": "msg_4",
-            "namespace": "main",
-            "role": "ai",
-            "content": "Here's your comprehensive analysis based on the detailed processing: The data shows strong correlation (0.85) with 3 distinct clusters and an upward trend. Covariance of 12.5 indicates significant relationships between variables.",
-            "artifacts": [
-                {
-                    "type": "AnalysisReport",
-                    "data": {"correlation": 0.85, "clusters": 3, "trend": "upward"},
-                    "namespace": "main",
-                    "timestamp": "2024-01-01T10:00:06",
-                }
-            ],
-            "timestamp": "2024-01-01T10:00:06",
-        },
-    ]
-
-    # Add test messages to session state
-    st.session_state.chat_history.extend(test_messages)
-    st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
-    st.rerun()
-
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
     #
     #
     #
