@@ -4,20 +4,16 @@ Phase 2: Clean, simple chat that leverages the new conversational streaming arch
 built in Phase 1. Starts with basic message streaming and builds from there.
 """
 
-import asyncio
 import uuid
-from typing import Any, Optional
 
 import streamlit as st
+from ai_engine.streaming.events import TokenStreamEvent, ToolCallEvent
 from frontend.services.conversational_stream_adapter import (
     get_avatar,
     get_speaker_for_namespace,
     get_tool_status_display,
 )
-from frontend.services.stream_processor_integration import (
-    ConversationalStreamProcessor,
-    create_simple_conversational_processor,
-)
+from frontend.services.stream_processor_integration import create_simple_conversational_processor
 from langchain_core.messages import HumanMessage
 
 
@@ -98,13 +94,13 @@ def _render_conversational_chat():
     # Handle new user input
     if prompt := st.chat_input("What would you like to ask?"):
         # Add user message to session state
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-                "timestamp": str(uuid.uuid4()),  # Simple ID for user messages
-            }
-        )
+        # st.session_state.messages.append(
+        #     {
+        #         "role": "user",
+        #         "content": prompt,
+        #         "timestamp": str(uuid.uuid4()),  # Simple ID for user messages
+        #     }
+        # )
 
         # Display user message immediately
         with st.chat_message("user"):
@@ -151,7 +147,7 @@ def _render_tool_call(message):
         result_text = str(result_content)
 
         if len(result_text) > 100:  # Show in expander for long results
-            with st.expander(f"View {message['name']} full result", expanded=False):
+            with st.expander(f"{message['name']} : {result_text[:25]}...", expanded=False):
                 if isinstance(result_content, dict) or isinstance(result_content, list):
                     st.json(result_content)
                 else:
@@ -193,48 +189,46 @@ def _render_inline_artifacts(artifacts):
 
 
 def _stream_conversational_response(user_input: str):
-    """Stream AI response using the conversational streaming architecture."""
+    """Simple real-time streaming focusing on the main experience."""
     try:
         # Get or create conversational processor
         if "conversational_processor" not in st.session_state:
             st.session_state.conversational_processor = create_simple_conversational_processor()
 
         processor = st.session_state.conversational_processor
-
-        # Reset processor for new conversation turn
-        processor.reset_session()
+        # processor.reset_session()
 
         # Prepare graph input
         input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
-
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-        # Run streaming in an async context
-        asyncio.run(_run_streaming_conversation(processor, input_state, config))
+        # Simple streaming generator focusing on readability
+        async def simple_stream():
+            """Simple streaming that prioritizes working over complexity."""
 
-        # After streaming completes, trigger rerun to show final state
-        # The adapter has already updated st.session_state.messages during streaming
-        st.rerun()
+            async for event in processor.stream_with_conversation(st.session_state.current_graph, input_state, config):
+                if isinstance(event, TokenStreamEvent) and hasattr(event, "content_delta") and event.content_delta:
+                    yield event.content_delta
+                elif isinstance(event, ToolCallEvent) and hasattr(event, "status") and hasattr(event, "tool_name"):
+                    # Show key tool events inline
+                    if event.status in ["args_started"]:
+                        yield f"\n\n🔧 *Calling {event.tool_name}...*\n\n"
+                    elif event.status == "args_streaming":
+                        yield f"{event.args_delta}"
+                    elif event.status == "args_ready":
+                        yield event.args
+                    elif event.status == "result_success":
+                        # st.json(event.args)
+                        yield f"\n\n✅ *{event.tool_name} completed*\n: {event.result.get('content', '') if event.result else ''}\n\n"
+
+        # Use Streamlit's native streaming
+        with st.chat_message("assistant", avatar="🤖"):
+            st.write_stream(simple_stream())
+            st.rerun()
 
     except Exception as e:
-        st.error(f"Error in conversational streaming: {str(e)}")
+        st.error(f"Error in simple streaming: {str(e)}")
         st.exception(e)
-
-
-async def _run_streaming_conversation(
-    processor: ConversationalStreamProcessor, input_state: dict[str, Any], config: dict[str, Any]
-) -> Optional[str]:
-    """Run the conversational streaming process."""
-    try:
-        graph = st.session_state.current_graph
-
-        # Process streaming events
-        async for event in processor.stream_with_conversation(graph, input_state, config):
-            pass
-
-    except Exception as e:
-        st.error(f"Error during streaming: {str(e)}")
-        return None
 
 
 def _init_chat_session():
@@ -351,19 +345,6 @@ def _add_test_messages():
     st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
     st.rerun()
 
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
     #
     #
     #

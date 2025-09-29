@@ -55,7 +55,7 @@ class GraphCatalog:
                 factory_function=get_clarify_graph,
                 default_config={
                     "name": "ClarifyAgent",
-                    "enrich_query_enabled": False,
+                    "research_brief": False,
                     "checkpointer": InMemorySaver(),
                 },
                 icon="❓",
