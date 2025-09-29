@@ -7,7 +7,6 @@ built in Phase 1. Starts with basic message streaming and builds from there.
 import uuid
 
 import streamlit as st
-from ai_engine.streaming.events import TokenStreamEvent, ToolCallEvent
 from frontend.services.conversational_stream_adapter import (
     get_avatar,
     get_speaker_for_namespace,
@@ -78,36 +77,28 @@ def _render_header():
 
 
 def _render_conversational_chat():
-    """Render conversation from st.session_state.messages in chronological order."""
+    """Render conversation from chat_history in chronological order."""
 
-    # Display all historical messages from session state
-    for message in st.session_state.messages:
-        if message["role"] == "user":
-            _render_user_message(message)
-        elif message["role"] == "ai":
-            _render_ai_message(message)
-        elif message["role"] == "tool_call":
-            _render_tool_call(message)
-        elif message["role"] == "artifact":
-            _render_artifact_message(message)
+    # Display all historical messages from chat_history
+    for message in st.session_state.chat_history:
+        _render_messages(message)
 
     # Handle new user input
     if prompt := st.chat_input("What would you like to ask?"):
-        # Add user message to session state
-        # st.session_state.messages.append(
-        #     {
-        #         "role": "user",
-        #         "content": prompt,
-        #         "timestamp": str(uuid.uuid4()),  # Simple ID for user messages
-        #     }
-        # )
-
-        # Display user message immediately
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Start streaming (adapter will update session state)
+        # Start streaming (will use live container system)
         _stream_conversational_response(prompt)
+
+
+def _render_messages(message):
+    """Render message."""
+    if message["role"] == "user":
+        _render_user_message(message)
+    elif message["role"] == "ai":
+        _render_ai_message(message)
+    elif message["role"] == "tool_call":
+        _render_tool_call(message)
+    elif message["role"] == "artifact":
+        _render_artifact_message(message)
 
 
 def _render_user_message(message):
@@ -189,45 +180,44 @@ def _render_inline_artifacts(artifacts):
 
 
 def _stream_conversational_response(user_input: str):
-    """Simple real-time streaming focusing on the main experience."""
+    """Stream response using live container system with real-time namespace separation."""
+    import asyncio
+
     try:
+        # Initialize live container area once (placeholder)
+        # if not st.session_state.live_container:
+        #     st.session_state.live_container = st.empty()
+
         # Get or create conversational processor
         if "conversational_processor" not in st.session_state:
             st.session_state.conversational_processor = create_simple_conversational_processor()
 
         processor = st.session_state.conversational_processor
-        # processor.reset_session()
+
+        # Set up live container update callback
+        adapter = processor.get_adapter()
+        adapter.set_container_update_callback(_update_live_containers)
 
         # Prepare graph input
         input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-        # Simple streaming generator focusing on readability
-        async def simple_stream():
-            """Simple streaming that prioritizes working over complexity."""
-
+        # Process streaming events (adapter will handle live_chat updates and container updates)
+        async def process_live_events():
+            """Process events with live container updates."""
             async for event in processor.stream_with_conversation(st.session_state.current_graph, input_state, config):
-                if isinstance(event, TokenStreamEvent) and hasattr(event, "content_delta") and event.content_delta:
-                    yield event.content_delta
-                elif isinstance(event, ToolCallEvent) and hasattr(event, "status") and hasattr(event, "tool_name"):
-                    # Show key tool events inline
-                    if event.status in ["args_started"]:
-                        yield f"\n\n🔧 *Calling {event.tool_name}...*\n\n"
-                    elif event.status == "args_streaming":
-                        yield f"{event.args_delta}"
-                    elif event.status == "args_ready":
-                        yield event.args
-                    elif event.status == "result_success":
-                        # st.json(event.args)
-                        yield f"\n\n✅ *{event.tool_name} completed*\n: {event.result.get('content', '') if event.result else ''}\n\n"
+                # Adapter handles everything - just wait for completion
+                pass
 
-        # Use Streamlit's native streaming
-        with st.chat_message("assistant", avatar="🤖"):
-            st.write_stream(simple_stream())
-            st.rerun()
+        with st.container().empty():
+            # Run the streaming
+            asyncio.run(process_live_events())
+
+        # Finalize: transfer to history and cleanup
+        _finalize_conversation()
 
     except Exception as e:
-        st.error(f"Error in simple streaming: {str(e)}")
+        st.error(f"Error in live container streaming: {str(e)}")
         st.exception(e)
 
 
@@ -237,6 +227,20 @@ def _init_chat_session():
         st.session_state.thread_id = str(uuid.uuid4())
         st.session_state.user_id = "demo_user"
 
+    # Live Container Architecture - Complete State Structure
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []  # Final conversation history
+
+    if "live_chat" not in st.session_state:
+        st.session_state.live_chat = []  # Current live conversation (same structure as chat_history)
+
+    if "live_container" not in st.session_state:
+        st.session_state.live_container = None  # Main live container
+
+    if "live_speakers" not in st.session_state:
+        st.session_state.live_speakers = {}  # namespace -> container mapping
+
+    # Legacy - keep for backward compatibility during transition
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -244,10 +248,135 @@ def _init_chat_session():
         st.session_state.conversational_processor = create_simple_conversational_processor()
 
 
+# Live Container Management Functions
+
+
+def _update_live_containers():
+    """Update live containers maintaining chronological order."""
+
+    # Clear all existing containers first (fresh render)
+    _clear_live_containers()
+
+    current_namespace = None
+    current_container = None
+
+    # Process messages chronologically (preserves conversation order)
+
+    for message in st.session_state.live_chat:
+        message_namespace = message.get("namespace", "main")
+
+        # Check if we need to switch containers (new namespace detected)
+        if message_namespace != current_namespace:
+            current_namespace = message_namespace
+            current_container = _get_or_create_namespace_container(message_namespace)
+
+        # Render message in current container
+        _render_message_in_container(message, current_container)
+
+
+def _get_or_create_namespace_container(namespace):
+    """Get or create container for namespace with visual separation."""
+    if namespace not in st.session_state.live_speakers:
+        # Create new container with namespace header
+        container = st.container()
+        if namespace != "main":
+            with container:
+                speaker = get_speaker_for_namespace(namespace)
+                avatar = get_avatar(speaker)
+                st.markdown(f"### {avatar} {speaker}")
+                st.markdown("---")
+
+        st.session_state.live_speakers[namespace] = container
+
+    return st.session_state.live_speakers[namespace]
+
+
+def _clear_live_containers():
+    """Clear all live containers."""
+
+    if "live_container" in st.session_state and st.session_state.live_container:
+        st.session_state.live_container = st.empty()
+
+    if "live_speakers" in st.session_state and st.session_state.live_speakers:
+        st.session_state.live_speakers = {}
+
+    # Keep mapping to reuse placeholders; callers can reset if needed
+
+
+def _render_message_in_container(message, container):
+    """Route message to appropriate render function with container."""
+
+    with container:
+        if message["role"] == "user":
+            _render_user_message(message)
+        elif message["role"] == "ai":
+            # Render AI message with speaker identification
+            speaker = get_speaker_for_namespace(message.get("namespace", "main"))
+            if speaker != "AI":
+                st.caption(f"🤖 {speaker}")
+            st.markdown(message["content"])
+            if "artifacts" in message and message["artifacts"]:
+                _render_inline_artifacts(message["artifacts"])
+        elif message["role"] == "tool_call":
+            # Render tool call status
+            tool_display = get_tool_status_display(message)
+            st.caption(tool_display)
+            # Handle tool results
+            if message["status"] == "result_success" and message.get("result"):
+                result_content = (
+                    message["result"]["content"]
+                    if isinstance(message["result"], dict) and "content" in message["result"]
+                    else message["result"]
+                )
+                result_text = str(result_content)
+                if len(result_text) > 100:
+                    with st.expander(f"{message['name']}: {result_text[:25]}...", expanded=False):
+                        if isinstance(result_content, (dict, list)):
+                            st.json(result_content)
+                        else:
+                            st.text(result_text)
+                else:
+                    st.caption(f"Result: {result_text}")
+        elif message["role"] == "artifact":
+            speaker = get_speaker_for_namespace(message.get("namespace", "main"))
+            if speaker != "AI":
+                st.caption(f"🤖 {speaker}")
+            st.info(f"📋 Created {message['artifact_type']}")
+            if st.button(f"View {message['artifact_type']}", key=f"artifact_{message.get('timestamp', 'unknown')}"):
+                st.json(message["artifact_data"])
+
+
+def _finalize_conversation():
+    """Transfer live_chat to chat_history and cleanup live containers."""
+
+    # Transfer live conversation to history
+    st.session_state.chat_history.extend(st.session_state.live_chat)
+
+    # Clear live state
+    st.session_state.live_chat = []
+
+    # Clear live containers
+    if st.session_state.live_container:
+        st.session_state.live_container = st.empty()
+
+    for container in st.session_state.live_speakers.values():
+        container.empty()
+
+    st.session_state.live_speakers = {}
+
+    # Rerun to show final history
+    st.rerun()
+
+
 def _clear_conversation():
     """Clear the conversation and reset session."""
-    st.session_state.messages = []
+    st.session_state.messages = []  # Legacy
+    st.session_state.chat_history = []  # New architecture
+    st.session_state.live_chat = []
     st.session_state.thread_id = str(uuid.uuid4())
+
+    # Clear live containers
+    _clear_live_containers()
 
     # Reset conversational processor
     if "conversational_processor" in st.session_state:
@@ -341,10 +470,103 @@ def _add_test_messages():
     ]
 
     # Add test messages to session state
-    st.session_state.messages.extend(test_messages)
+    st.session_state.chat_history.extend(test_messages)
     st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
     st.rerun()
 
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     #
     #
     #

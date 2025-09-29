@@ -3,14 +3,14 @@
 This module provides the data layer for conversational streaming that transforms
 namespace-based streaming events into sequential message structure in st.session_state.
 
-Architecture V2: Pure data layer - no UI concerns, updates st.session_state.messages directly.
+Architecture V2: Pure data layer - no UI concerns, updates st.session_state.chat_history directly.
 """
 
 import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import streamlit as st
 from ai_engine.streaming.events import (
@@ -34,9 +34,8 @@ class ConversationalStreamAdapter:
 
     def __init__(self):
         """Initialize the conversational stream adapter."""
-        # Initialize session state messages if not exists
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+        self.current_speakers: Dict[str, str] = {}  # namespace -> speaker mapping
+        self._container_update_callback: Optional[Callable] = None
 
         # Speaker avatars for namespace mapping (used by UI layer)
         self.speaker_avatars = {
@@ -64,6 +63,18 @@ class ConversationalStreamAdapter:
         """Get avatar for speaker."""
         return self.speaker_avatars.get(speaker, "🤖")
 
+    def set_container_update_callback(self, callback: Callable):
+        """Set callback function to trigger live container updates."""
+        self._container_update_callback = callback
+
+    def _trigger_container_update(self):
+        """Trigger live container update if callback is set."""
+        if self._container_update_callback:
+            try:
+                self._container_update_callback()
+            except Exception as e:
+                logger.error(f"Error triggering container update: {e}")
+
     async def process_event(self, event: StreamEvent):
         """Process events and update sequential message structure in session state."""
 
@@ -79,23 +90,26 @@ class ConversationalStreamAdapter:
         elif isinstance(event, ArtifactEvent):
             await self.handle_conversational_artifact(event)
 
+        # Trigger live container update
+        self._trigger_container_update()
+
     async def handle_conversational_streaming(self, event: TokenStreamEvent):
-        """Update or create AI message in session state."""
+        """Update or create AI message in live_chat and trigger container updates."""
 
         # Skip if no message_id (shouldn't happen in normal streaming)
         if not event.message_id:
             logger.warning(f"Received TokenStreamEvent without message_id in namespace {event.namespace}")
             return
 
-        # Find existing message in session state
-        existing_msg = self._find_message_in_session_state(event.message_id, event.namespace)
+        # Find existing message in live_chat
+        existing_msg = self._find_message_in_live_chat(event.message_id, event.namespace)
 
         if existing_msg:
             # Update existing message content (token streaming)
             existing_msg["content"] = event.accumulated_content
-            logger.debug(f"Updated message {event.message_id} in namespace {event.namespace}")
+            logger.debug(f"Updated live message {event.message_id} in namespace {event.namespace}")
         else:
-            # Create new AI message in session state
+            # Create new AI message in live_chat
             new_message = {
                 "id": event.message_id,
                 "namespace": event.namespace,
@@ -103,13 +117,13 @@ class ConversationalStreamAdapter:
                 "content": event.accumulated_content,
                 "timestamp": datetime.now().isoformat(),
             }
-            st.session_state.messages.append(new_message)
-            logger.debug(f"Created new message {event.message_id} in namespace {event.namespace}")
+            st.session_state.live_chat.append(new_message)
+            logger.debug(f"Created new live message {event.message_id} in namespace {event.namespace}")
 
     async def handle_conversational_message_received(self, event: MessageReceivedEvent):
         """Update or create message entry in session state."""
         # Find existing message in session state
-        existing_msg = self._find_message_in_session_state(event.id, event.namespace)
+        existing_msg = self._find_message_in_live_chat(event.message_id, event.namespace)
 
         if existing_msg:
             # Update existing message content (token streaming)
@@ -124,14 +138,14 @@ class ConversationalStreamAdapter:
                 "content": event.message.content,
                 "timestamp": datetime.now().isoformat(),
             }
-            st.session_state.messages.append(new_message)
+            st.session_state.live_chat.append(new_message)
             logger.debug(f"Created new message {event.message_id} in namespace {event.namespace}")
 
     async def handle_conversational_tool_call(self, event: ToolCallEvent):
         """Update or create tool call entry in session state."""
 
         # Find existing tool call entry
-        existing_tool = self._find_tool_call_in_session_state(event.tool_call_id)
+        existing_tool = self._find_tool_call_in_live_chat(event.tool_call_id)
 
         if existing_tool:
             # Update existing tool call status/result
@@ -154,7 +168,8 @@ class ConversationalStreamAdapter:
                 "result": event.result,
                 "timestamp": datetime.now().isoformat(),
             }
-            st.session_state.messages.append(new_tool_call)
+            st.session_state.live_chat.append(new_tool_call)
+            # st.session_state.live_chat.chat_message("ai").markdown(f"🔧 *Calling {event.tool_name}...* BIM BAM BOUM")
             logger.debug(f"Created new tool call {event.tool_call_id} for {event.tool_name}")
 
     async def handle_conversational_update(self, event: ChannelValueEvent):
@@ -168,7 +183,7 @@ class ConversationalStreamAdapter:
 
         # Find the most recent AI message in this namespace to attach artifact to
         recent_ai_msg = None
-        for msg in reversed(st.session_state.messages):
+        for msg in reversed(st.session_state.live_chat):
             if msg.get("role") == "ai" and msg.get("namespace") == event.namespace:
                 recent_ai_msg = msg
                 break
@@ -195,38 +210,52 @@ class ConversationalStreamAdapter:
                 "artifact_data": event.artifact_data,
                 "timestamp": datetime.now().isoformat(),
             }
-            st.session_state.messages.append(artifact_message)
+            st.session_state.live_chat.append(artifact_message)
             logger.info(f"Created standalone artifact message: {event.artifact_type}")
 
     def _find_message_in_session_state(self, message_id: str, namespace: str) -> Optional[Dict[str, Any]]:
         """Find existing AI message in session state."""
-        for msg in st.session_state.messages:
+        for msg in st.session_state.chat_history:
             if msg.get("id") == message_id:
+                return msg
+        return None
+
+    def _find_message_in_live_chat(self, message_id: str, namespace: str) -> Optional[Dict[str, Any]]:
+        """Find existing AI message in live_chat."""
+        for msg in st.session_state.live_chat:
+            if msg.get("id") == message_id:
+                return msg
+        return None
+
+    def _find_tool_call_in_live_chat(self, tool_call_id: str) -> Optional[Dict[str, Any]]:
+        """Find existing tool call in session state."""
+        for msg in st.session_state.live_chat:
+            if msg.get("tool_call_id") == tool_call_id and msg.get("role") == "tool_call":
                 return msg
         return None
 
     def _find_tool_call_in_session_state(self, tool_call_id: str) -> Optional[Dict[str, Any]]:
         """Find existing tool call in session state."""
-        for msg in st.session_state.messages:
+        for msg in st.session_state.chat_history:
             if msg.get("tool_call_id") == tool_call_id and msg.get("role") == "tool_call":
                 return msg
         return None
 
     def reset_session(self):
         """Reset the conversational session by clearing messages."""
-        if "messages" in st.session_state:
-            st.session_state.messages.clear()
+        if "chat_history" in st.session_state:
+            st.session_state.chat_history.clear()
         logger.debug("Conversational session reset - messages cleared")
 
     def get_conversation_summary(self) -> Dict[str, Any]:
         """Get a summary of the current conversation."""
-        if "messages" not in st.session_state:
+        if "chat_history" not in st.session_state:
             return {"total_messages": 0, "speakers": [], "tool_calls": 0}
 
         speakers = set()
         tool_calls = 0
 
-        for message in st.session_state.messages:
+        for message in st.session_state.chat_history:
             if message.get("role") == "ai" and message.get("namespace"):
                 speaker = self.get_speaker_for_namespace(message["namespace"])
                 speakers.add(speaker)
@@ -234,10 +263,10 @@ class ConversationalStreamAdapter:
                 tool_calls += 1
 
         return {
-            "total_messages": len(st.session_state.messages),
+            "total_messages": len(st.session_state.chat_history),
             "speakers": list(speakers),
             "tool_calls": tool_calls,
-            "messages": st.session_state.messages,  # Include full messages for detailed summary
+            "messages": st.session_state.chat_history,  # Include full messages for detailed summary
         }
 
 

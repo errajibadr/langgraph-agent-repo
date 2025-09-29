@@ -52,7 +52,7 @@ def auto_connect_model(
         if model_changed and "messages" in st.session_state:
             top_p_display = "Disabled" if top_p is None else f"{top_p}"
             system_msg = f" **{model_message}** - {provider_name}: `{model}` (T={temperature}, P={top_p_display}, Max={max_tokens})"
-            st.session_state.messages.append({"role": "assistant", "content": system_msg})
+            st.session_state.chat_history.append({"role": "assistant", "content": system_msg})
 
         return True
     except Exception:

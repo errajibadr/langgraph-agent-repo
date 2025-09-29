@@ -239,7 +239,7 @@ class ChannelStreamingProcessor:
 
         # Handle regular content streaming for AIMessageChunk only
         if isinstance(message, AIMessageChunk) and message.content:
-            accumulator_key = f"{namespace}:{task_id or 'default'}"
+            accumulator_key = f"{namespace}:{message.id}"
 
             # Accumulate content
             if accumulator_key not in self._message_accumulators:

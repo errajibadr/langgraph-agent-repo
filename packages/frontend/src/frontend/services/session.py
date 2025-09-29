@@ -9,9 +9,9 @@ def init_session_state():
         st.session_state.fetched_models = []
     if "models_provider" not in st.session_state:
         st.session_state.models_provider = None
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
     if "current_model_name" not in st.session_state:
         st.session_state.current_model_name = None
     if "last_config" not in st.session_state:
         st.session_state.last_config = {}
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
