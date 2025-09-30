@@ -8,7 +8,7 @@ Defines how streaming should behave:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Literal, Optional, Set
 
 
 class StreamMode(Enum):
@@ -83,7 +83,9 @@ class TokenStreamingConfig:
     and optionally includes tool call streaming.
     """
 
-    enabled_namespaces: Set[str] = field(default_factory=lambda: {"main"})  # Namespaces to stream from
+    enabled_namespaces: Set[str | Literal["main", "all"]] = field(
+        default_factory=lambda: {"main"}
+    )  # Namespaces to stream from
     message_tags: Optional[Set[str]] = None  # Filter by message tags (e.g., agent_name)
     include_tool_calls: bool = False  # Enable tool call streaming events
 

@@ -11,7 +11,7 @@ Integrates and improves the functionality from utils/channel_streaming_v2.py.
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 
-from langchain_core.messages.ai import AIMessage, AIMessageChunk
+from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.tool import ToolMessage, ToolMessageChunk
 
@@ -260,17 +260,72 @@ class ChannelStreamingProcessor:
             )
 
     def _should_stream_tokens_from_namespace(self, namespace: str) -> bool:
-        """Check if we should stream tokens from this namespace."""
-        # Extract the base namespace (first part before any task IDs)
-        base_namespace = namespace.split(":")[0] if ":" in namespace else namespace
-        return base_namespace in self.token_streaming.enabled_namespaces
+        """Check if we should stream tokens from this namespace.
+
+        Supports flexible pattern matching:
+        - "all" - matches everything
+        - "main" - exact match for main namespace
+        - "clarifynode" - matches clarifynode:12345
+        - "clarifynode:*" - matches clarifynode:12345, clarifynode:12345:subgraphnode:345346 (any depth)
+        - "clarifynode:subgraphnode" - matches clarifynode:12345:subgraphnode:345346
+
+        Type extraction (modulo 2):
+        - clarifynode:12345 → clarifynode (indices 0)
+        - clarifynode:12345:subgraphnode:345346 → clarifynode:subgraphnode (indices 0, 2)
+        - graph_node:12345:subgraphnode:123345 → graph_node:subgraphnode (indices 0, 2)
+
+        Args:
+            namespace: The namespace to check (e.g., "clarifynode:12345:subgraphnode:345346")
+
+        Returns:
+            True if tokens should be streamed from this namespace
+        """
+        if "all" in self.token_streaming.enabled_namespaces:
+            return True
+
+        # Extract type-based namespace pattern (every other part)
+        namespace_pattern = self._extract_namespace_pattern(namespace)
+
+        # Check against all enabled patterns
+        for pattern in self.token_streaming.enabled_namespaces:
+            # Handle wildcard patterns (e.g., "clarifynode:*")
+            if pattern.endswith(":*"):
+                prefix = pattern[:-2]  # Remove ":*"
+                if namespace_pattern == prefix or namespace_pattern.startswith(f"{prefix}:"):
+                    return True
+            # Exact match
+            elif namespace_pattern == pattern:
+                return True
+
+        return False
+
+    def _extract_namespace_pattern(self, namespace: str) -> str:
+        """Extract the type-based pattern from a namespace by taking every other part.
+
+        The pattern assumes: type:id:type:id:type:id...
+        We extract indices 0, 2, 4, ... (modulo 2 == 0)
+
+        Args:
+            namespace: e.g., "clarifynode:12345:subgraphnode:345346"
+
+        Returns:
+            Type pattern, e.g., "clarifynode:subgraphnode"
+        """
+        if namespace == "main":
+            return "main"
+
+        parts = namespace.split(":")
+        # Extract every other part starting from index 0 (the types)
+        type_parts = [parts[i] for i in range(0, len(parts), 2)]
+
+        return ":".join(type_parts)
 
     async def _process_channel_values(
         self, namespace: str, chunk: Dict[str, Any]
     ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Process state values for channel monitoring."""
         for channel_key, config in self.channels.items():
-            if channel_key not in chunk:
+            if channel_key not in chunk or not chunk[channel_key]:
                 continue
 
             current_value = chunk[channel_key]

@@ -1,9 +1,9 @@
 import logging
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
+from typing import AsyncGenerator, Callable, List
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
-from .events import MessageReceivedEvent, StreamEvent, ToolCallEvent
+from .events import MessageReceivedEvent, StreamEvent
 from .tool_calls import ToolCallTracker
 
 logger = logging.getLogger(__name__)

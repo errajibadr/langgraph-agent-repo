@@ -67,7 +67,6 @@ def get_deepsearch_graph(
 
     # Add edges
     graph.add_edge(START, "clarify")
-    graph.add_edge("clarify", "orchestrate")
     # Compile and return
     compiled_graph = graph.compile(name=name or "DeepSearchAgent", **kwargs)
     return compiled_graph
