@@ -1,4 +1,4 @@
-# Debugging utilities
+"""Debug utilities for development and testing."""
 
 import streamlit as st
 
@@ -6,14 +6,17 @@ import streamlit as st
 def show_debug_info():
     """Show debug information about current conversation state."""
     if st.button("🔍 Debug: Show Message State"):
-        st.subheader("Current Message State")
-        st.json(st.session_state.chat_history)
+        st.subheader("Chat History")
+        if "chat_history" in st.session_state:
+            st.json(st.session_state.chat_history)
+        else:
+            st.info("No chat history")
 
-        if "conversational_processor" in st.session_state:
-            adapter = st.session_state.conversational_processor.get_adapter()
-            summary = adapter.get_conversation_summary()
-            st.subheader("Conversation Summary")
-            st.json(summary)
+        st.subheader("Live Chat")
+        if "live_chat" in st.session_state:
+            st.json(st.session_state.live_chat)
+        else:
+            st.info("No live chat")
 
 
 def add_test_messages():
@@ -39,7 +42,7 @@ def add_test_messages():
             "name": "think_tool",
             "status": "result_success",
             "args": {"reflection": "The user is asking me to analyze data..."},
-            "result": "Reflection complete - proceeding with analysis",
+            "result": {"content": "Reflection complete - proceeding with analysis"},
             "timestamp": "2024-01-01T10:00:02",
         },
         {
@@ -57,7 +60,7 @@ def add_test_messages():
             "id": "msg_3",
             "namespace": "analysis_agent:task_123",
             "role": "ai",
-            "content": "Analyzing the data now... I've found several interesting patterns in the data. Analysis complete! Key findings: correlation coefficient 0.85, 3 main clusters identified.",
+            "content": "Analyzing the data now... I've found several interesting patterns. Analysis complete! Key findings: correlation coefficient 0.85, 3 main clusters identified.",
             "timestamp": "2024-01-01T10:00:04",
         },
         {
@@ -68,7 +71,7 @@ def add_test_messages():
             "name": "data_processor",
             "status": "result_success",
             "args": {"query": "deep analysis"},
-            "result": "covariance: 12.5, variance: 8.2, trends: upward",
+            "result": {"content": "covariance: 12.5, variance: 8.2, trends: upward"},
             "timestamp": "2024-01-01T10:00:05",
         },
         {
@@ -89,6 +92,8 @@ def add_test_messages():
     ]
 
     # Add test messages to session state
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
     st.session_state.chat_history.extend(test_messages)
     st.success(f"Added {len(test_messages)} test messages demonstrating the sequential conversation flow!")
     st.rerun()

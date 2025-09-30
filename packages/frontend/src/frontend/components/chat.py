@@ -1,16 +1,18 @@
-"""Simple conversational chat interface using ConversationalStreamAdapter.
+"""Simple conversational chat interface with unified streaming service.
 
-Phase 2: Clean, simple chat that leverages the new conversational streaming architecture
-built in Phase 1. Starts with basic message streaming and builds from there.
+This chat component provides:
+- Real-time conversational streaming with multi-namespace support
+- Live container updates for concurrent agent execution
+- Clean historical conversation rendering
 """
 
+import asyncio
 import uuid
+from datetime import datetime
 
 import streamlit as st
-from frontend.services.conversational_stream_adapter import (
-    get_avatar, get_speaker_for_namespace, get_tool_status_display)
-from frontend.services.stream_processor_integration import \
-    create_conversational_processor
+from frontend.services.streaming_service import create_streaming_service
+from frontend.utils.chat_utils import get_avatar, get_speaker_for_namespace, get_tool_status_display
 from frontend.utils.debug_utils import add_test_messages, show_debug_info
 from langchain_core.messages import HumanMessage
 
@@ -180,33 +182,31 @@ def _render_inline_artifacts(artifacts):
 
 def _stream_conversational_response(user_input: str):
     """Stream response using live container system with real-time namespace separation."""
-    import asyncio
 
     try:
-        # Get or create conversational processor
-        if "conversational_processor" not in st.session_state:
-            st.session_state.conversational_processor = create_conversational_processor()
+        # Get or create streaming service
+        if "streaming_service" not in st.session_state:
+            st.session_state.streaming_service = create_streaming_service()
 
-        processor = st.session_state.conversational_processor
+        service = st.session_state.streaming_service
 
         # Set up live container update callback
-        adapter = processor.get_adapter()
-        adapter.set_container_update_callback(_update_live_containers)
+        service.set_container_update_callback(_update_live_containers)
 
         input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-        # Process streaming events (adapter will handle live_chat updates and container updates)
+        # Process streaming events (service handles live_chat updates and container updates)
         async def process_live_events():
             """Process events with live container updates."""
-            async for event in processor.stream_with_conversation(st.session_state.current_graph, input_state, config):
-                # Adapter handles everything - just wait for completion
+            async for event in service.stream_conversation(st.session_state.current_graph, input_state, config):
+                # Service handles everything - just wait for completion
                 pass
 
         with st.container().empty():
-            # Run the streaming
             asyncio.run(process_live_events())
 
+        # Finalize: transfer to history and cleanup
         _finalize_run_live_streaming()
 
     except Exception as e:
@@ -230,8 +230,8 @@ def _init_chat_session():
     if "live_speakers" not in st.session_state:
         st.session_state.live_speakers = {}  # namespace -> container mapping
 
-    if "conversational_processor" not in st.session_state:
-        st.session_state.conversational_processor = create_conversational_processor()
+    if "streaming_service" not in st.session_state:
+        st.session_state.streaming_service = create_streaming_service()
 
 
 # Live Container Management Functions
@@ -304,10 +304,15 @@ def _clear_conversation():
     # Clear live containers
     _clear_live_containers()
 
-    # Reset conversational processor
-    if "conversational_processor" in st.session_state:
-        st.session_state.conversational_processor.reset_session()
+    # Reset streaming service
+    if "streaming_service" in st.session_state:
+        st.session_state.streaming_service.reset_session()
 
+    #
+    #
+    #
+    #
+    #
     #
     #
     #
