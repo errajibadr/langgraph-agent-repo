@@ -186,7 +186,9 @@ def _stream_conversational_response(user_input: str):
     try:
         # Get or create streaming service
         if "streaming_service" not in st.session_state:
-            st.session_state.streaming_service = create_streaming_service()
+            st.session_state.streaming_service = create_streaming_service(
+                agent_names=["orchestrate", "clarify", "supervisor"]
+            )
 
         service = st.session_state.streaming_service
 
@@ -244,23 +246,27 @@ def _update_live_containers():
     _clear_live_containers()
 
     current_container = None
+    main_container = _get_or_create_namespace_container("main")
 
     # Process messages chronologically (preserves conversation order)
 
     for message in st.session_state.live_chat:
         message_namespace = message.get("namespace", "main")
 
-        current_container = _get_or_create_namespace_container(message_namespace)
+        with main_container:
+            if message_namespace == "main":
+                _render_messages(message)
+            else:
+                current_container = _get_or_create_namespace_container(message_namespace)
+                with current_container:
+                    _render_messages(message)
 
-        with current_container:
-            _render_messages(message)
 
-
-def _get_or_create_namespace_container(namespace):
+def _get_or_create_namespace_container(namespace: str):
     """Get or create container for namespace with visual separation."""
     if namespace not in st.session_state.live_speakers:
         # Create new container with namespace header
-        container = st.container()
+        container = st.container(border=True)
         if namespace != "main":
             with container:
                 speaker = get_speaker_for_namespace(namespace)
@@ -308,6 +314,18 @@ def _clear_conversation():
     if "streaming_service" in st.session_state:
         st.session_state.streaming_service.reset_session()
 
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     #
     #
     #
