@@ -8,7 +8,6 @@ This chat component provides:
 
 import asyncio
 import uuid
-from datetime import datetime
 
 import streamlit as st
 from frontend.services.streaming_service import create_streaming_service
@@ -314,6 +313,7 @@ def _clear_conversation():
     if "streaming_service" in st.session_state:
         st.session_state.streaming_service.reset_session()
 
+    #
     #
     #
     #

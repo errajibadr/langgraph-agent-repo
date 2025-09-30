@@ -10,7 +10,6 @@ Architecture: Single unified service that owns the entire streaming pipeline
 from LangGraph events to chat state updates.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Set

@@ -262,12 +262,15 @@ class ChannelStreamingProcessor:
     def _should_stream_tokens_from_namespace(self, namespace: str) -> bool:
         """Check if we should stream tokens from this namespace.
 
-        Supports flexible pattern matching:
-        - "all" - matches everything
+        Supports flexible pattern matching with exclusions:
+        - "all" - matches everything (unless excluded)
         - "main" - exact match for main namespace
         - "clarifynode" - matches clarifynode:12345
         - "clarifynode:*" - matches clarifynode:12345, clarifynode:12345:subgraphnode:345346 (any depth)
         - "clarifynode:subgraphnode" - matches clarifynode:12345:subgraphnode:345346
+
+        Exclusions override inclusions. If a namespace matches an exclude pattern,
+        it will not stream even if it matches an enabled pattern.
 
         Type extraction (modulo 2):
         - clarifynode:12345 → clarifynode (indices 0)
@@ -280,24 +283,42 @@ class ChannelStreamingProcessor:
         Returns:
             True if tokens should be streamed from this namespace
         """
-        if "all" in self.token_streaming.enabled_namespaces:
-            return True
-
         # Extract type-based namespace pattern (every other part)
         namespace_pattern = self._extract_namespace_pattern(namespace)
 
+        # Check exclusions first (they override everything)
+        if self.token_streaming.exclude_namespaces:
+            for exclude_pattern in self.token_streaming.exclude_namespaces:
+                if self._matches_pattern(namespace_pattern, exclude_pattern):
+                    return False
+
+        # Check if "all" is enabled
+        if "all" in self.token_streaming.enabled_namespaces:
+            return True
+
         # Check against all enabled patterns
         for pattern in self.token_streaming.enabled_namespaces:
-            # Handle wildcard patterns (e.g., "clarifynode:*")
-            if pattern.endswith(":*"):
-                prefix = pattern[:-2]  # Remove ":*"
-                if namespace_pattern == prefix or namespace_pattern.startswith(f"{prefix}:"):
-                    return True
-            # Exact match
-            elif namespace_pattern == pattern:
+            if self._matches_pattern(namespace_pattern, pattern):
                 return True
 
         return False
+
+    def _matches_pattern(self, namespace_pattern: str, pattern: str) -> bool:
+        """Check if a namespace pattern matches a given pattern.
+
+        Args:
+            namespace_pattern: Extracted pattern (e.g., "clarifynode:subgraphnode")
+            pattern: Pattern to match against (e.g., "clarifynode:*", "clarifynode")
+
+        Returns:
+            True if the namespace pattern matches the pattern
+        """
+        # Handle wildcard patterns (e.g., "clarifynode:*")
+        if pattern.endswith(":*"):
+            prefix = pattern[:-2]  # Remove ":*"
+            return namespace_pattern == prefix or namespace_pattern.startswith(f"{prefix}:")
+        # Exact match
+        return namespace_pattern == pattern
 
     def _extract_namespace_pattern(self, namespace: str) -> str:
         """Extract the type-based pattern from a namespace by taking every other part.

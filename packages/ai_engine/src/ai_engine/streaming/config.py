@@ -86,6 +86,9 @@ class TokenStreamingConfig:
     enabled_namespaces: Set[str | Literal["main", "all"]] = field(
         default_factory=lambda: {"main"}
     )  # Namespaces to stream from
+    exclude_namespaces: Set[str | Literal["main", "all"]] = field(
+        default_factory=lambda: set()
+    )  # Namespaces to exclude from streaming
     message_tags: Optional[Set[str]] = None  # Filter by message tags (e.g., agent_name)
     include_tool_calls: bool = False  # Enable tool call streaming events
 
