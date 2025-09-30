@@ -1,6 +1,6 @@
 """UI components for the Streamlit frontend."""
 
-from .artifacts_display import render_artifacts, render_artifacts_compact
+from .artifacts_display import render_artifacts
 from .chat import render_chat_interface
 from .configuration import render_example_configurations, render_llm_configuration
 from .graph_selector import render_graph_selector
@@ -16,5 +16,4 @@ __all__ = [
     "render_sidebar",
     "render_graph_selector",
     "render_artifacts",
-    "render_artifacts_compact",
 ]

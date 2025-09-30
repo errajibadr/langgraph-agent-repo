@@ -6,7 +6,7 @@ This module provides utility functions for:
 - Tool call status formatting
 """
 
-from typing import Any, Dict
+from frontend.types.messages import ToolCallMessage
 
 
 def get_speaker_for_namespace(namespace: str) -> str:
@@ -63,7 +63,7 @@ def get_avatar(speaker: str) -> str:
     return avatars.get(speaker, "🤖")
 
 
-def get_tool_status_display(tool_message: Dict[str, Any]) -> str:
+def get_tool_status_display(tool_message: ToolCallMessage) -> str:
     """Convert tool call status to user-friendly display string.
 
     Args:

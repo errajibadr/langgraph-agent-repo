@@ -11,6 +11,7 @@ from LangGraph events to chat state updates.
 """
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Set
 
@@ -25,6 +26,7 @@ from ai_engine.streaming.events import (
     ToolCallEvent,
 )
 from ai_engine.streaming.processor import ChannelStreamingProcessor
+from frontend.types.messages import AIMessage, ArtifactData, ArtifactMessage, ToolCallMessage, UserMessage
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +146,8 @@ class ConversationalStreamingService:
             existing_msg["content"] = event.accumulated_content
             logger.debug(f"Updated live message {event.message_id} in namespace {event.namespace}")
         else:
-            # Create new AI message in live_chat
-            new_message = {
+            # Create new AI message in live_chat (type: AIMessage)
+            new_message: AIMessage = {
                 "id": event.message_id,
                 "namespace": event.namespace,
                 "role": "ai",
@@ -164,11 +166,12 @@ class ConversationalStreamingService:
             existing_msg["content"] = event.message.content
             logger.debug(f"Updated message {event.message_id} in namespace {event.namespace}")
         else:
-            # Create new message in live_chat
-            new_message = {
+            # Create new message in live_chat (type: AIMessage or UserMessage)
+            role = event.message_type if event.message_type in ["ai", "user"] else "ai"
+            new_message: AIMessage | UserMessage = {
                 "id": event.message_id,
                 "namespace": event.namespace,
-                "role": event.message_type,
+                "role": role,  # type: ignore
                 "content": event.message.content,
                 "timestamp": datetime.now().isoformat(),
             }
@@ -181,25 +184,28 @@ class ConversationalStreamingService:
 
         if existing_tool:
             # Update existing tool call status/result
-            existing_tool["status"] = event.status
+            existing_tool["status"] = event.status  # type: ignore
             if event.args:
                 existing_tool["args"] = event.args
             if event.result:
                 existing_tool["result"] = event.result
             logger.debug(f"Updated tool call {event.tool_call_id} with status {event.status}")
         else:
-            # Create new tool call entry in live_chat
-            new_tool_call = {
+            # Create new tool call entry in live_chat (type: ToolCallMessage)
+            new_tool_call: ToolCallMessage = {
                 "namespace": event.namespace,
                 "message_id": event.message_id,
                 "tool_call_id": event.tool_call_id,
                 "role": "tool_call",
                 "name": event.tool_name,
-                "status": event.status,
-                "args": event.args,
-                "result": event.result,
+                "status": event.status,  # type: ignore
                 "timestamp": datetime.now().isoformat(),
             }
+            if event.args:
+                new_tool_call["args"] = event.args
+            if event.result:
+                new_tool_call["result"] = event.result
+
             st.session_state.live_chat.append(new_tool_call)
             logger.debug(f"Created new tool call {event.tool_call_id} for {event.tool_name}")
 
@@ -209,7 +215,12 @@ class ConversationalStreamingService:
             logger.debug(f"Channel update: {event.channel} in namespace {event.namespace}")
 
     async def _handle_artifact(self, event: ArtifactEvent):
-        """Handle artifacts by attaching them to the most recent AI message in the namespace."""
+        """Handle artifacts by attaching them to the most recent AI message in the namespace.
+
+        Note: event.artifact_data can be either:
+        - A list of Pydantic artifact models (from agents)
+        - A single dict (from other sources)
+        """
         # Find the most recent AI message in this namespace
         recent_ai_msg = None
         for msg in reversed(st.session_state.live_chat):
@@ -217,26 +228,55 @@ class ConversationalStreamingService:
                 recent_ai_msg = msg
                 break
 
+        # Normalize artifact_data to a list
+        artifacts_list = event.artifact_data if isinstance(event.artifact_data, list) else [event.artifact_data]
+
         if recent_ai_msg:
-            # Add artifact to the message
+            # Add artifacts to the message (properly typed as ArtifactData)
             if "artifacts" not in recent_ai_msg:
                 recent_ai_msg["artifacts"] = []
 
-            artifact_data = {
-                "type": event.artifact_type,
-                "data": event.artifact_data,
-                "namespace": event.namespace,
-                "timestamp": datetime.now().isoformat(),
-            }
-            recent_ai_msg["artifacts"].append(artifact_data)
-            logger.info(f"Added artifact {event.artifact_type} to message in namespace {event.namespace}")
+            # Process each artifact individually
+            for artifact_item in artifacts_list:
+                # Convert Pydantic model to dict if needed
+                if hasattr(artifact_item, "model_dump"):
+                    artifact_dict = artifact_item.model_dump()
+                elif isinstance(artifact_item, dict):
+                    artifact_dict = artifact_item
+                else:
+                    logger.warning(f"Unexpected artifact type: {type(artifact_item)}")
+                    continue
+
+                # Extract artifact type from the artifact itself, or use event type
+                artifact_type = artifact_dict.get("type", event.artifact_type)
+
+                artifact_data: ArtifactData = {
+                    "type": artifact_type,  # type: ignore
+                    "id": artifact_dict.get("id", f"{event.namespace}_{uuid.uuid4()}"),
+                    "data": artifact_dict,  # Store the full artifact dict
+                    "namespace": event.namespace,
+                    "timestamp": datetime.now().isoformat(),
+                }
+                recent_ai_msg["artifacts"].append(artifact_data)
+
+            logger.info(f"Added {len(artifacts_list)} artifact(s) to message in namespace {event.namespace}")
         else:
             # Create standalone artifact message if no AI message found
-            artifact_message = {
+            # Convert to dict if it's a Pydantic model or list
+            if isinstance(event.artifact_data, list):
+                artifact_data_dict = [
+                    item.model_dump() if hasattr(item, "model_dump") else item for item in event.artifact_data
+                ]
+            elif hasattr(event.artifact_data, "model_dump"):
+                artifact_data_dict = event.artifact_data.model_dump()
+            else:
+                artifact_data_dict = event.artifact_data
+
+            artifact_message: ArtifactMessage = {
                 "namespace": event.namespace,
                 "role": "artifact",
                 "artifact_type": event.artifact_type,
-                "artifact_data": event.artifact_data,
+                "artifact_data": artifact_data_dict,  # type: ignore
                 "timestamp": datetime.now().isoformat(),
             }
             st.session_state.live_chat.append(artifact_message)
@@ -340,4 +380,11 @@ def create_streaming_service(
     )
 
     logger.info(f"Created streaming service with namespaces: {enabled_namespaces}")
+    return service
+    return service
+    return service
+    return service
+    return service
+    return service
+    return service
     return service

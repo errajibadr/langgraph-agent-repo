@@ -8,9 +8,12 @@ This chat component provides:
 
 import asyncio
 import uuid
+from typing import Any
 
 import streamlit as st
+from frontend.components.artifacts_display import render_artifacts
 from frontend.services.streaming_service import create_streaming_service
+from frontend.types.messages import AIMessage, ArtifactMessage, ChatMessage, ToolCallMessage
 from frontend.utils.chat_utils import get_avatar, get_speaker_for_namespace, get_tool_status_display
 from frontend.utils.debug_utils import add_test_messages, show_debug_info
 from langchain_core.messages import HumanMessage
@@ -89,8 +92,8 @@ def _render_conversational_chat():
         _stream_conversational_response(prompt)
 
 
-def _render_messages(message):
-    """Render message."""
+def _render_messages(message: ChatMessage):
+    """Render message based on role (type-safe)."""
     if message["role"] == "user":
         _render_user_message(message)
     elif message["role"] == "ai":
@@ -107,8 +110,8 @@ def _render_user_message(message):
         st.markdown(message["content"])
 
 
-def _render_ai_message(message):
-    """Render AI message with proper speaker identification."""
+def _render_ai_message(message: AIMessage):
+    """Render AI message with proper speaker identification and inline artifacts."""
     # Determine speaker and avatar from namespace
     speaker = get_speaker_for_namespace(message.get("namespace", "main"))
     avatar = get_avatar(speaker)
@@ -121,19 +124,25 @@ def _render_ai_message(message):
         # Message content
         st.markdown(message["content"])
 
-        # Display artifacts if present
+        # Display artifacts if present (type-based rendering)
         if "artifacts" in message and message["artifacts"]:
-            _render_inline_artifacts(message["artifacts"])
+            selected_value = render_artifacts(
+                message["artifacts"], key_prefix=f"artifact_{message.get('id', 'unknown')}"
+            )
+
+            # If a followup artifact was clicked, send it as user input
+            if selected_value:
+                _stream_conversational_response(selected_value)
 
 
-def _render_tool_call(message):
+def _render_tool_call(message: ToolCallMessage):
     """Render tool call as inline work indicator."""
     # Tool status display
     tool_display = get_tool_status_display(message)
     st.caption(tool_display)
 
     # Expandable result for completed tools with results
-    if message["status"] == "result_success" and message.get("result"):
+    if message["status"] == "result_success" and "result" in message and message.get("result"):
         result_content = message["result"]["content"]
         result_text = str(result_content)
 
@@ -148,12 +157,12 @@ def _render_tool_call(message):
             st.caption(f"Result: {result_text}")
 
     # Show error details for failed tools
-    elif message["status"] == "result_error" and message.get("result"):
+    elif message["status"] == "result_error" and "result" in message and message.get("result"):
         with st.expander(f"Error details for {message['name']}", expanded=False):
             st.error(str(message["result"]))
 
 
-def _render_artifact_message(message):
+def _render_artifact_message(message: ArtifactMessage):
     """Render standalone artifact message."""
     # Determine speaker from namespace
     speaker = get_speaker_for_namespace(message.get("namespace", "main"))
@@ -168,15 +177,7 @@ def _render_artifact_message(message):
         if st.button(f"View {message['artifact_type']}", key=f"artifact_{message.get('timestamp', 'unknown')}"):
             st.json(message["artifact_data"])
 
-
-def _render_inline_artifacts(artifacts):
-    """Render artifacts inline with AI message."""
-    with st.expander(f"📋 {len(artifacts)} Artifact(s)", expanded=False):
-        for i, artifact in enumerate(artifacts):
-            st.subheader(f"📋 {artifact['type']}")
-            st.json(artifact["data"])
-            if i < len(artifacts) - 1:
-                st.divider()
+    # Stream new response
 
 
 def _stream_conversational_response(user_input: str):
@@ -313,6 +314,22 @@ def _clear_conversation():
     if "streaming_service" in st.session_state:
         st.session_state.streaming_service.reset_session()
 
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     #
     #
     #
