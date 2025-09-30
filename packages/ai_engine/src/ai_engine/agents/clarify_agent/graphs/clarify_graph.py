@@ -89,8 +89,6 @@ def get_clarify_graph(
             command_config["graph"] = Command.PARENT
             command_config["goto"] = parent_next_node if not clarify_response.need_clarification else "__end__"
 
-        print(f"Command config: {command_config}")
-
         return Command(
             goto=command_config["goto"],
             graph=command_config.get("graph", None),
@@ -126,3 +124,5 @@ def get_clarify_graph(
     # Compile and return
     compiled_graph = graph.compile(name=name or "ClarifyAgent", **kwargs)
     return compiled_graph
+    #
+    #

@@ -14,6 +14,7 @@ from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.tool import ToolMessage, ToolMessageChunk
+from langgraph.graph.state import CompiledStateGraph
 
 from .artifact_channel_handler import ArtifactChannelHandler
 from .config import ChannelConfig, ChannelType, TokenStreamingConfig
@@ -73,7 +74,7 @@ class ChannelStreamingProcessor:
         # return "updates" if not self.prefer_updates else "values"
 
     async def stream(
-        self, graph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
+        self, graph: CompiledStateGraph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
     ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Stream from a LangGraph with separated channel and token streaming.
 
@@ -93,8 +94,8 @@ class ChannelStreamingProcessor:
 
         async for raw_output in graph.astream(
             input_data,
-            config=config,
-            stream_mode=stream_modes,
+            config=config,  # type: ignore
+            stream_mode=stream_modes,  # type: ignore
             subgraphs=True,  # Always enable subgraphs for namespace support
             **kwargs,
         ):
@@ -357,14 +358,11 @@ class ChannelStreamingProcessor:
             if current_value == previous_value:
                 continue
 
-            # Update previous state
             self._previous_state[state_key] = current_value
 
-            # Apply filter if configured
             if config.filter_fn and not config.filter_fn(current_value):
                 continue
 
-            # Extract components
             node_name, task_id = self._parse_namespace_components(namespace)
 
             # Calculate delta for generic channels
@@ -382,18 +380,22 @@ class ChannelStreamingProcessor:
                     yield event
                 continue
 
-            # ARTIFACT or GENERIC
-            async for event in self._artifact_handler.handle_values(
-                namespace=namespace,
-                channel_key=channel_key,
-                current_value=current_value,
-                previous_value=previous_value,
-                artifact_type=config.artifact_type,
-                node_name=node_name,
-                task_id=task_id,
-                value_delta=value_delta,
-            ):
-                yield event
+            # We assume it's an ARTIFACT/GENERIC if it's not a message
+            if config.channel_type in [ChannelType.ARTIFACT, ChannelType.GENERIC]:
+                async for event in self._artifact_handler.handle_values(
+                    namespace=namespace,
+                    artifact_type=config.artifact_type,
+                    channel_key=channel_key,
+                    current_value=current_value,
+                    previous_value=previous_value or [],
+                    node_name=node_name,
+                    task_id=task_id,
+                    value_delta=value_delta,
+                ):
+                    yield event
+                continue
+
+            logger.warning(f"{config.channel_type} channel type not supported in processing")
 
     def _parse_namespace_components(self, namespace: str) -> tuple[str, Optional[str]]:
         """Parse namespace to extract node_name and task_id."""

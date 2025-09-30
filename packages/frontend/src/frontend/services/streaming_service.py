@@ -65,7 +65,7 @@ class ConversationalStreamingService:
         ]
 
         if include_artifacts:
-            channels.append(ChannelConfig(key="artifacts", channel_type=ChannelType.ARTIFACT))
+            channels.append(ChannelConfig(key="artifacts", channel_type=ChannelType.ARTIFACT, artifact_type="artifact"))
 
         # Configure token streaming for multiple namespaces
         token_streaming_config = TokenStreamingConfig(
@@ -103,13 +103,12 @@ class ConversationalStreamingService:
         logger.info("Starting conversational streaming")
 
         async for event in self.processor.stream(graph, input_data, config, **kwargs):
-            # Process event and update chat state
             await self._handle_event(event)
 
             # Trigger live container update
             self._trigger_container_update()
 
-            # Yield the event for any additional processing
+            # if any additional processing needed
             yield event
 
         logger.info("Conversational streaming completed")

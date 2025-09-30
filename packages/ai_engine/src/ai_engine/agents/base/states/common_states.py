@@ -4,17 +4,20 @@ This module contains reusable state classes and schemas that can be shared
 across different agents to avoid duplication and ensure consistency.
 """
 
-from core.models import Artifact as BaseArtifact
+from core.models import UserChoiceArtifact
 from pydantic import BaseModel, Field
 
 
-class ClarificationArtifact(BaseArtifact):
+class ClarificationArtifact(UserChoiceArtifact):
     """Artifact for clarification options that users can select.
 
     These artifacts provide concrete options that users can click on
     instead of having to type their response.
+    `title` and `description` are what is displayed to the user,
+    `value` is the value that will be used to route the flow.
     """
 
+    value: str = Field(description="Value of the clarification choice")
     pass
 
 

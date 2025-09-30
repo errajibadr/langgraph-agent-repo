@@ -56,7 +56,7 @@ class ChannelConfig:
     key: str  # State key to monitor (e.g., "messages", "notes", "questions")
     stream_mode: StreamMode = StreamMode.VALUES_ONLY  # How to stream this channel
     channel_type: ChannelType = ChannelType.GENERIC  # Channel semantics
-    artifact_type: Optional[str] = "generic"  # Map to artifact type for UI display
+    artifact_type: str = "generic"  # Map to artifact type for UI display
     filter_fn: Optional[Callable[[Any], bool]] = None  # Custom filter for values
     # DEPRECATED: use channel_type=ChannelType.MESSAGE instead
     parse_messages: Optional[bool] = None  # kept for backward compatibility
@@ -66,6 +66,9 @@ class ChannelConfig:
         if not self.key:
             raise ValueError("Channel key cannot be empty")
 
+        if self.channel_type == ChannelType.ARTIFACT and self.artifact_type == "generic":
+            raise ValueError("artifact_type must be provided for artifact channels")
+
         if self.artifact_type and not isinstance(self.artifact_type, str):
             raise ValueError("artifact_type must be a string if provided")
 
@@ -73,6 +76,9 @@ class ChannelConfig:
         # explicitly by caller (left to default GENERIC), treat as MESSAGE.
         if self.parse_messages is True and self.channel_type == ChannelType.GENERIC:
             self.channel_type = ChannelType.MESSAGE
+
+        self.artifact_type = self.artifact_type.lower()
+        self.key = self.key.lower()
 
 
 @dataclass

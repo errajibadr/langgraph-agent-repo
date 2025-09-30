@@ -7,11 +7,10 @@ user queries in an AI-OPS context.
 from operator import add
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
-from langgraph.graph import add_messages
-
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
 from ai_engine.agents.clarify_agent.states import ClarificationArtifact, ClarifyContext
+from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
+from langgraph.graph import add_messages
 
 
 class InputState(TypedDict):
@@ -28,7 +27,7 @@ async def main():
     # Create the clarify graph
     clarify_graph = get_clarify_graph(
         name="ClarifyAgent",
-        enrich_query_enabled=False,
+        research_brief=False,
     )
 
     # Configuration with thread ID for conversation tracking
@@ -71,4 +70,5 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
+    asyncio.run(main())
     asyncio.run(main())
