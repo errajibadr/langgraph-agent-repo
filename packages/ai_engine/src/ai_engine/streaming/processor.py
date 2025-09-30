@@ -208,10 +208,15 @@ class ChannelStreamingProcessor:
         if not self._should_stream_tokens_from_namespace(namespace):
             return
 
+        message_tags = set(metadata.get("tags", []))
+
         # Check message tags filtering
-        if self.token_streaming.message_tags:
-            message_tags = set(metadata.get("tags", []))
-            if not message_tags.intersection(self.token_streaming.message_tags):
+        if self.token_streaming.include_tags:
+            if not message_tags.intersection(self.token_streaming.include_tags):
+                return
+        if self.token_streaming.exclude_tags:
+            if message_tags.intersection(self.token_streaming.exclude_tags):
+                # logger.warning(f"Skipping token streaming for namespace {namespace} due to exclude tags : {chunk}")
                 return
 
         if not isinstance(message, AIMessageChunk) and not isinstance(message, ToolMessage):

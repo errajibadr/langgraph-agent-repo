@@ -95,7 +95,8 @@ class TokenStreamingConfig:
     exclude_namespaces: Set[str | Literal["main", "all"]] = field(
         default_factory=lambda: set()
     )  # Namespaces to exclude from streaming
-    message_tags: Optional[Set[str]] = None  # Filter by message tags (e.g., agent_name)
+    include_tags: Optional[Set[str]] = None  # Filter by message tags (e.g., agent_name)
+    exclude_tags: Optional[Set[str]] = None  # Filter out by message tags (e.g., agent_name)
     include_tool_calls: bool = False  # Enable tool call streaming events
 
     def __post_init__(self):
@@ -108,8 +109,11 @@ class TokenStreamingConfig:
             self.enabled_namespaces = set(self.enabled_namespaces)
 
         # Ensure message_tags is a set if provided
-        if self.message_tags and isinstance(self.message_tags, (list, tuple)):
-            self.message_tags = set(self.message_tags)
+        if self.include_tags and isinstance(self.include_tags, (list, tuple)):
+            self.include_tags = set(self.include_tags)
+
+        if self.exclude_tags and isinstance(self.exclude_tags, (list, tuple)):
+            self.exclude_tags = set(self.exclude_tags)
 
 
 @dataclass

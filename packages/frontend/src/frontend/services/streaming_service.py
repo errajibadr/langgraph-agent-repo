@@ -50,6 +50,8 @@ class ConversationalStreamingService:
         enabled_namespaces: Optional[Set[str]] = None,
         include_tool_calls: bool = True,
         include_artifacts: bool = True,
+        include_tags: Optional[Set[str]] = None,
+        exclude_tags: Optional[Set[str]] = None,
     ):
         """Initialize the conversational streaming service.
 
@@ -71,7 +73,10 @@ class ConversationalStreamingService:
 
         # Configure token streaming for multiple namespaces
         token_streaming_config = TokenStreamingConfig(
-            enabled_namespaces=self.enabled_namespaces, include_tool_calls=include_tool_calls
+            enabled_namespaces=self.enabled_namespaces,
+            include_tool_calls=include_tool_calls,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
         )
 
         # Create the underlying LangGraph stream processor
@@ -350,7 +355,11 @@ class ConversationalStreamingService:
 
 # Factory function for easy service creation
 def create_streaming_service(
-    agent_names: Optional[List[str]] = None, include_tool_calls: bool = True, include_artifacts: bool = True
+    agent_names: Optional[List[str]] = None,
+    include_tool_calls: bool = True,
+    include_artifacts: bool = True,
+    include_tags: Optional[Set[str]] = None,
+    exclude_tags: Optional[Set[str]] = None,
 ) -> ConversationalStreamingService:
     """Create a conversational streaming service.
 
@@ -377,14 +386,13 @@ def create_streaming_service(
         enabled_namespaces=enabled_namespaces,
         include_tool_calls=include_tool_calls,
         include_artifacts=include_artifacts,
+        include_tags=include_tags,
+        exclude_tags=exclude_tags,
     )
 
     logger.info(f"Created streaming service with namespaces: {enabled_namespaces}")
     return service
-    return service
-    return service
-    return service
-    return service
-    return service
-    return service
-    return service
+    #
+    #
+    #
+    #

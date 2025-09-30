@@ -8,7 +8,6 @@ This chat component provides:
 
 import asyncio
 import uuid
-from typing import Any
 
 import streamlit as st
 from frontend.components.artifacts_display import render_artifacts
@@ -184,12 +183,6 @@ def _stream_conversational_response(user_input: str):
     """Stream response using live container system with real-time namespace separation."""
 
     try:
-        # Get or create streaming service
-        if "streaming_service" not in st.session_state:
-            st.session_state.streaming_service = create_streaming_service(
-                agent_names=["orchestrate", "clarify", "supervisor"]
-            )
-
         service = st.session_state.streaming_service
 
         # Set up live container update callback
@@ -233,7 +226,9 @@ def _init_chat_session():
         st.session_state.live_speakers = {}  # namespace -> container mapping
 
     if "streaming_service" not in st.session_state:
-        st.session_state.streaming_service = create_streaming_service()
+        st.session_state.streaming_service = create_streaming_service(
+            agent_names=["all"], exclude_tags={"structured_output"}
+        )
 
 
 # Live Container Management Functions
@@ -244,7 +239,6 @@ def _update_live_containers():
 
     # Clear all existing containers first (fresh render)
     _clear_live_containers()
-
     current_container = None
     main_container = _get_or_create_namespace_container("main")
 
@@ -314,47 +308,5 @@ def _clear_conversation():
     if "streaming_service" in st.session_state:
         st.session_state.streaming_service.reset_session()
 
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
     #
     #

@@ -74,7 +74,9 @@ def get_clarify_graph(
         model = create_chat_model(model=model).with_structured_output(ClarifyWithUser)
 
         # Get clarification response
-        clarify_response: ClarifyWithUser = await model.ainvoke([system_message, *state.get("messages", [])])  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
+        clarify_response: ClarifyWithUser = await model.ainvoke(
+            [system_message, *state.get("messages", [])], config={"tags": ["clarify_agent", "structured_output"]}
+        )  # type: ignore : typing Known limitations for langchain w/ pydantic v1/v2 mismatches
 
         command_config = {"goto": "__end__"}
         # Determine next step
@@ -124,5 +126,8 @@ def get_clarify_graph(
     # Compile and return
     compiled_graph = graph.compile(name=name or "ClarifyAgent", **kwargs)
     return compiled_graph
+    #
+    #
+    #
     #
     #
