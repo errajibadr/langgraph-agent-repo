@@ -6,14 +6,13 @@ Common states like ClarifyWithUser and UserContext are imported from base.
 
 from typing import Annotated, TypedDict
 
+from core.models import Artifact
 from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph import add_messages
-
-from ai_engine.agents.base.states.common_states import ClarificationArtifact
 
 
 class GlobalState(TypedDict):
     """State for the supervisor agent."""
 
     messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
-    artifacts: list[ClarificationArtifact]
+    artifacts: list[Artifact]

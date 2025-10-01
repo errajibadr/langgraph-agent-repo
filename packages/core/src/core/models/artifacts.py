@@ -64,7 +64,7 @@ class NotesArtifact(Artifact):
     """Optional extension for notes-style artifacts, if needed later."""
 
     type: Literal["notes"] = Field(default=ArtifactType.NOTES.value)
-    content: str | None = None
+    content: str
 
 
 class FollowUpQuestionArtifact(Artifact):

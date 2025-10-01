@@ -8,10 +8,31 @@ import operator
 from operator import add as list_add
 from typing import Annotated, Sequence, TypedDict
 
+from ai_engine.agents.clarify_agent.states import ClarificationArtifact
 from langgraph.graph.message import AnyMessage, BaseMessage, add_messages
 from pydantic import BaseModel, Field
 
-from ..base.states import ClarifyWithUser  # type: ignore
+
+class ClarifyWithUser(BaseModel):
+    """State for the clarify with user node.
+
+    Used when an agent needs clarification from the user before proceeding
+    with a task. This schema provides a standardized way to handle user
+    clarification across different agents.
+    """
+
+    need_clarification: bool = Field(
+        default=False, description="Whether you need more clarification from the user to proceed"
+    )
+    question: str = Field(description="The question to ask the user to clarify the request")
+    verification: str = Field(
+        description="Verification message confirming what will be done after clarification",
+    )
+    artifacts: list[ClarificationArtifact] = Field(
+        default_factory=list,
+        # max_length=4,
+        description="Clarification artifacts - concrete options the user can select (max 4)",
+    )
 
 
 class ResearchAgentInputState(BaseModel):

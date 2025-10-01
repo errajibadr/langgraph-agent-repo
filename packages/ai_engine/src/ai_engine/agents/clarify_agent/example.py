@@ -4,22 +4,10 @@ This example demonstrates how to use the clarify agent to disambiguate
 user queries in an AI-OPS context.
 """
 
-from operator import add
-from typing import Annotated, TypedDict
+from langchain_core.messages import HumanMessage
 
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
-from ai_engine.agents.clarify_agent.states import ClarificationArtifact, ClarifyContext
-from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
-from langgraph.graph import add_messages
-
-
-class InputState(TypedDict):
-    """Simple input state for the clarify agent."""
-
-    messages: Annotated[list[AnyMessage | BaseMessage], add_messages]
-    current_round: int
-    max_rounds: int
-    artifacts: Annotated[list[ClarificationArtifact], add]
+from ai_engine.agents.clarify_agent.states import ClarifyContext, ClarifyInputState
 
 
 async def main():
@@ -28,18 +16,14 @@ async def main():
     clarify_graph = get_clarify_graph(
         name="ClarifyAgent",
         research_brief=False,
+        max_iterations=3,
     )
 
     # Configuration with thread ID for conversation tracking
     config = {"configurable": {"thread_id": "example-thread-1"}}
     context = ClarifyContext(user_id="example-user-1")  # type: ignore
     # Example user query that needs clarification
-    initial_state = InputState(
-        messages=[HumanMessage("Show me the recent issues with my app")],
-        current_round=0,
-        max_rounds=3,
-        artifacts=[],
-    )
+    initial_state = ClarifyInputState(messages=[HumanMessage("Show me the recent issues with my app")])
 
     # Stream the conversation
     print("=== Clarify Agent Example ===")
@@ -71,4 +55,4 @@ if __name__ == "__main__":
 
     load_dotenv()
     asyncio.run(main())
-    asyncio.run(main())
+    #

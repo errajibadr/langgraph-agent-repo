@@ -2,7 +2,9 @@ from datetime import datetime
 
 from langchain_core.messages import BaseMessage, filter_messages
 
-get_today_date = lambda: datetime.now().strftime("%Y-%m-%d")
+
+def get_today_date():
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def get_notes_from_tool_calls(messages: list[BaseMessage]) -> list[str]:

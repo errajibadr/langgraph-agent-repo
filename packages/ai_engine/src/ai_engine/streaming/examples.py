@@ -6,13 +6,14 @@ not simulated data. Uses the supervisor graph for concrete examples.
 
 import asyncio
 
+from langchain_core.messages import HumanMessage
+
 from ai_engine.agents.aiops_deepsearch_agent.graphs.deepsearch_graph import get_deepsearch_graph
 from ai_engine.agents.aiops_supervisor_agent.graphs.supervisor_graph import get_supervisor_graph
 from ai_engine.agents.clarify_agent.graphs.clarify_graph import get_clarify_graph
 from ai_engine.streaming.config import ChannelConfig, ChannelType, StreamMode, TokenStreamingConfig
 from ai_engine.streaming.events import ArtifactEvent, MessageReceivedEvent, TokenStreamEvent, ToolCallEvent
 from ai_engine.streaming.processor import ChannelStreamingProcessor
-from langchain_core.messages import HumanMessage
 
 
 async def real_supervisor_streaming_example():
@@ -41,8 +42,8 @@ async def real_supervisor_streaming_example():
 
     # Get real supervisor graph
     # graph = get_supervisor_graph(name="streaming_supervisor_demo")
-    # graph = get_deepsearch_graph(name="streaming_deepsearch_demo", include_clarify=False)
-    graph = get_clarify_graph(name="streaming_clarify_demo")
+    graph = get_deepsearch_graph(name="streaming_deepsearch_demo", include_clarify=True)
+    # graph = get_clarify_graph(name="streaming_clarify_demo")
 
     # Real input
     input_data = {

@@ -1,5 +1,7 @@
 """Context utility functions for AI agents."""
 
+from langgraph.graph.state import RunnableConfig
+
 from ai_engine.agents.base.states.context import UserContext
 
 
@@ -27,3 +29,8 @@ def get_user_context(user_id: str | None = None) -> UserContext | None:
         user_environments=["prod", "dev"],
         current_incidents_alerts="No incidents or alerts",
     )
+
+
+def is_subgraph(config: RunnableConfig) -> bool:
+    """Check if we are currently in a subgraph."""
+    return len(config.get("configurable", {}).get("checkpoint_ns", "").split("|")) > 1
