@@ -125,9 +125,11 @@ def _render_ai_message(message: AIMessage):
 
         # Display artifacts if present (type-based rendering)
         if "artifacts" in message and message["artifacts"]:
-            selected_value = render_artifacts(
-                message["artifacts"], key_prefix=f"artifact_{message.get('id', 'unknown')}"
-            )
+            # Use render cycle to ensure unique keys (increments during live streaming, stays 0 for history)
+            render_cycle = st.session_state.get("live_render_cycle", 0)
+            key_prefix = f"{render_cycle}_artifact_{message.get('id', 'unknown')}"
+
+            selected_value = render_artifacts(message["artifacts"], key_prefix=key_prefix)
 
             # If a followup artifact was clicked, send it as user input
             if selected_value:
@@ -225,6 +227,9 @@ def _init_chat_session():
     if "live_speakers" not in st.session_state:
         st.session_state.live_speakers = {}  # namespace -> container mapping
 
+    if "live_render_cycle" not in st.session_state:
+        st.session_state.live_render_cycle = 0  # Counter to ensure unique keys during rapid updates
+
     if "streaming_service" not in st.session_state:
         st.session_state.streaming_service = create_streaming_service(
             agent_names=["all"], exclude_tags={"structured_output"}
@@ -236,6 +241,9 @@ def _init_chat_session():
 
 def _update_live_containers():
     """Update live containers maintaining chronological order."""
+
+    # Increment render cycle to ensure unique keys on each update
+    st.session_state.live_render_cycle = st.session_state.get("live_render_cycle", 0) + 1
 
     # Clear all existing containers first (fresh render)
     _clear_live_containers()
@@ -289,6 +297,7 @@ def _finalize_run_live_streaming():
     # Clear live state
     st.session_state.live_chat = []
     st.session_state.live_speakers = {}
+    st.session_state.live_render_cycle = 0  # Reset render cycle counter
 
     # Rerun to show final history
     st.rerun()
@@ -308,5 +317,6 @@ def _clear_conversation():
     if "streaming_service" in st.session_state:
         st.session_state.streaming_service.reset_session()
 
+    #
     #
     #

@@ -30,7 +30,9 @@ def render_artifacts(artifacts: list[ArtifactData], key_prefix: str = "artifacts
     for idx, artifact in enumerate(artifacts):
         artifact_type = artifact.get("type", "generic")
         artifact_data = artifact.get("data", {})
-        artifact_id = artifact_data.get("id", f"{key_prefix}_{idx}")  # + f"_{str(uuid.uuid4())[:8]}"
+        # Always use key_prefix + idx to ensure uniqueness across messages
+        # (same artifact in different messages gets different keys)
+        artifact_id = f"{key_prefix}_{idx}"
 
         # Dispatch to type-specific renderer
         if artifact_type == "followup":
