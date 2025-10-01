@@ -10,12 +10,13 @@ import asyncio
 import uuid
 
 import streamlit as st
+from langchain_core.messages import HumanMessage
+
 from frontend.components.artifacts_display import render_artifacts
-from frontend.services.streaming_service import create_streaming_service
+from frontend.services.streaming_service import ConversationalStreamingService, create_streaming_service
 from frontend.types.messages import AIMessage, ArtifactMessage, ChatMessage, ToolCallMessage
 from frontend.utils.chat_utils import get_avatar, get_speaker_for_namespace, get_tool_status_display
 from frontend.utils.debug_utils import add_test_messages, show_debug_info
-from langchain_core.messages import HumanMessage
 
 
 def render_chat_interface():
@@ -185,18 +186,21 @@ def _stream_conversational_response(user_input: str):
     """Stream response using live container system with real-time namespace separation."""
 
     try:
-        service = st.session_state.streaming_service
+        service: ConversationalStreamingService = st.session_state.streaming_service
 
         # Set up live container update callback
         service.set_container_update_callback(_update_live_containers)
 
         input_state = {"messages": [HumanMessage(content=user_input)], "artifacts": [], "research_iteration": 0}
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
+        context = {"user_id": st.session_state.user_id}
 
         # Process streaming events (service handles live_chat updates and container updates)
         async def process_live_events():
             """Process events with live container updates."""
-            async for event in service.stream_conversation(st.session_state.current_graph, input_state, config):
+            async for event in service.stream_conversation(
+                graph=st.session_state.current_graph, input_data=input_state, config=config, context=context
+            ):
                 # Service handles everything - just wait for completion
                 pass
 

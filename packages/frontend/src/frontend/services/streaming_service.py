@@ -26,6 +26,7 @@ from ai_engine.streaming.events import (
     ToolCallEvent,
 )
 from ai_engine.streaming.processor import ChannelStreamingProcessor
+
 from frontend.types.messages import AIMessage, ArtifactData, ArtifactMessage, ToolCallMessage, UserMessage
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,9 @@ class ConversationalStreamingService:
 
         if include_artifacts:
             channels.append(ChannelConfig(key="artifacts", channel_type=ChannelType.ARTIFACT, artifact_type="artifact"))
+            channels.append(
+                ChannelConfig(key="research_brief", channel_type=ChannelType.ARTIFACT, artifact_type="artifact")
+            )
 
         # Configure token streaming for multiple namespaces
         token_streaming_config = TokenStreamingConfig(
@@ -88,7 +92,12 @@ class ConversationalStreamingService:
         logger.info(f"ConversationalStreamingService initialized with namespaces: {self.enabled_namespaces}")
 
     async def stream_conversation(
-        self, graph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
+        self,
+        graph,
+        context: Dict[str, Any],
+        input_data: Dict[str, Any],
+        config: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Stream from LangGraph and update chat state in real-time.
 
@@ -109,7 +118,9 @@ class ConversationalStreamingService:
         """
         logger.info("Starting conversational streaming")
 
-        async for event in self.processor.stream(graph, input_data, config, **kwargs):
+        async for event in self.processor.stream(
+            graph=graph, input_data=input_data, config=config, context=context, **kwargs
+        ):
             await self._handle_event(event)
 
             # Trigger live container update

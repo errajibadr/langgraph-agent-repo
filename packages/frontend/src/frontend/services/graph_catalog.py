@@ -35,6 +35,19 @@ class GraphCatalog:
     def _initialize_catalog(self) -> Dict[str, GraphInfo]:
         """Initialize the catalog with available graphs."""
         return {
+            "clarify_agent": GraphInfo(
+                id="clarify_agent",
+                name="Clarify Agent",
+                description="AI-OPS clarification agent that helps disambiguate operational queries before routing to specialist agents",
+                category="Clarification",
+                factory_function=get_clarify_graph,
+                default_config={
+                    "name": "ClarifyAgent",
+                    # "research_brief": False,
+                    "checkpointer": InMemorySaver(),
+                },
+                icon="❓",
+            ),
             "aiops_deepsearch_agent": GraphInfo(
                 id="aiops_deepsearch_agent",
                 name="AI-OPS Deep Search Agent",
@@ -46,19 +59,6 @@ class GraphCatalog:
                     "checkpointer": InMemorySaver(),
                 },
                 icon="👔",
-            ),
-            "clarify_agent": GraphInfo(
-                id="clarify_agent",
-                name="Clarify Agent",
-                description="AI-OPS clarification agent that helps disambiguate operational queries before routing to specialist agents",
-                category="Clarification",
-                factory_function=get_clarify_graph,
-                default_config={
-                    "name": "ClarifyAgent",
-                    "research_brief": False,
-                    "checkpointer": InMemorySaver(),
-                },
-                icon="❓",
             ),
             "supervisor_agent": GraphInfo(
                 id="supervisor_agent",

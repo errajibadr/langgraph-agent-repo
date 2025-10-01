@@ -9,6 +9,7 @@ Handles different artifact types:
 from typing import Any, Optional
 
 import streamlit as st
+
 from frontend.types.messages import ArtifactData
 
 

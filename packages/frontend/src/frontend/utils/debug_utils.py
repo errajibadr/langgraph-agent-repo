@@ -89,6 +89,30 @@ def add_test_messages():
             ],
             "timestamp": "2024-01-01T10:00:06",
         },
+        {
+            "namespace": "main",
+            "message_id": "msg_4",
+            "role": "ai",
+            "content": "Here's your comprehensive analysis based on the detailed processing: The data shows strong correlation (0.85) with 3 distinct clusters and an upward trend. Covariance of 12.5 indicates significant relationships between variables.",
+            "timestamp": "2024-01-01T10:00:07",
+            "artifacts": [
+                {
+                    "type": "notes",
+                    "id": "main_c8ccc64b-5eae-4697-8cc5-1fbff5a26e78",
+                    "data": {
+                        "title": "Analysis Report",
+                        "description": "Analysis report for the data",
+                        "content": (
+                            "Investigate the production logs for the lgPlatform application for the current day (2025-10-01). "
+                            "The goal is to identify any errors, warnings, or anomalies that may indicate an issue. "
+                            "The research should focus on log entries from the primary application logs, system logs, and any relevant monitoring alerts. "
+                            "Include timestamps, severity levels, and relevant context. If possible, cross‑reference with deployment events or configuration changes that occurred today. "
+                            "The analysis should produce a concise summary of findings and suggested next steps."
+                        ),
+                    },
+                }
+            ],
+        },
     ]
 
     # Add test messages to session state

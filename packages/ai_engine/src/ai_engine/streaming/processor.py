@@ -74,7 +74,12 @@ class ChannelStreamingProcessor:
         # return "updates" if not self.prefer_updates else "values"
 
     async def stream(
-        self, graph: CompiledStateGraph, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs
+        self,
+        graph: CompiledStateGraph,
+        input_data: Dict[str, Any],
+        config: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> AsyncGenerator[StreamEvent | ToolCallEvent, None]:
         """Stream from a LangGraph with separated channel and token streaming.
 
@@ -95,6 +100,7 @@ class ChannelStreamingProcessor:
         async for raw_output in graph.astream(
             input_data,
             config=config,  # type: ignore
+            context=context,  # type: ignore
             stream_mode=stream_modes,  # type: ignore
             subgraphs=True,  # Always enable subgraphs for namespace support
             **kwargs,
