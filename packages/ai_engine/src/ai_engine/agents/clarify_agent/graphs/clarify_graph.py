@@ -9,8 +9,7 @@ from logging import getLogger
 from typing import Annotated, Callable, Literal, Tuple, Type
 
 from annotated_types import Gt
-from core.models.artifacts import Artifact, NotesArtifact
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph, RunnableConfig
 from langgraph.runtime import Runtime
@@ -18,7 +17,10 @@ from langgraph.types import Command
 
 from ai_engine.agents.base.utils import get_user_context
 from ai_engine.agents.base.utils.context_utils import is_subgraph
-from ai_engine.agents.clarify_agent.prompts.clarify_prompts import CLARIFY_AIOPS_PROMPT, RESEARCH_BRIEF_PROMPT
+from ai_engine.agents.clarify_agent.prompts.aiops_clarify_prompts import (
+    AIOPS_CLARIFY_PROMPT,
+    AIOPS_RESEARCH_BRIEF_PROMPT,
+)
 from ai_engine.agents.clarify_agent.states import (
     ClarifyContext,
     ClarifyInputState,
@@ -103,11 +105,10 @@ def get_clarify_graph(
             "user_context": get_user_context(user_id),
             "clarification_round": state["clarification_iteration"],
             "max_rounds": max_iterations,
-            "current_incidents_alerts": "No current incidents or alerts",
             "aiops_vocabulary": "Standard AI-OPS terminology",
         }
 
-        prompt_template = runtime_prompt or system_prompt or CLARIFY_AIOPS_PROMPT.format(**params)
+        prompt_template = runtime_prompt or system_prompt or AIOPS_CLARIFY_PROMPT.format(**params)
         system_message = SystemMessage(content=prompt_template)
 
         model = create_chat_model(model=model).with_structured_output(ClarifyWithUser)
@@ -147,11 +148,19 @@ def get_clarify_graph(
             },
         )
 
-    def write_research_brief(state: ClarifyState):
+    def write_research_brief(state: ClarifyState, runtime: Runtime[ClarifyContext], config: RunnableConfig):
         """Write the research brief Node"""
-        model = create_chat_model().with_structured_output(ResearchBrief)
+        user_id, runtime_prompt, model = get_context(runtime)
+        model = create_chat_model(model=model).with_structured_output(ResearchBrief)
         research_brief: ResearchBrief = model.invoke(
-            [SystemMessage(content=RESEARCH_BRIEF_PROMPT.format(date=get_today_date()))] + state["messages"],  # type: ignore
+            [
+                SystemMessage(
+                    content=AIOPS_RESEARCH_BRIEF_PROMPT.format(
+                        date=get_today_date(), user_context=get_user_context(user_id=user_id), test="test"
+                    )
+                )
+            ]
+            + state["messages"],  # type: ignore
             config={"tags": ["clarify_agent", "structured_output"] + [name] if name else []},
         )
 

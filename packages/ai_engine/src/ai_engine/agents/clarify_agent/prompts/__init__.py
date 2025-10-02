@@ -1,5 +1,6 @@
 """Prompts for the Clarify Agent."""
 
-from .clarify_prompts import CLARIFY_AIOPS_PROMPT
+from .aiops_clarify_prompts import AIOPS_CLARIFY_PROMPT, AIOPS_RESEARCH_BRIEF_PROMPT
+from .clarify_prompts import CLARIFY_PROMPT, RESEARCH_BRIEF_PROMPT
 
-__all__ = ["CLARIFY_AIOPS_PROMPT"]
+__all__ = ["CLARIFY_PROMPT", "RESEARCH_BRIEF_PROMPT", "AIOPS_CLARIFY_PROMPT", "AIOPS_RESEARCH_BRIEF_PROMPT"]
