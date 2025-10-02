@@ -82,7 +82,7 @@ class AIMessage(BaseMessage):
 class ToolCallMessage(BaseMessage):
     """Tool call/execution message."""
 
-    message_id: str
+    message_id: str  # Message id where we detected the ToolCall
     tool_call_id: str
     role: Literal["tool_call"]
     name: str
@@ -94,9 +94,9 @@ class ToolCallMessage(BaseMessage):
 class ArtifactMessage(BaseMessage):
     """Standalone artifact message (when no AI message to attach to)."""
 
+    id: str
     role: Literal["artifact"]
-    artifact_type: str
-    artifact_data: dict[str, Any]
+    artifacts: list[ArtifactData]  # Use same structure as AIMessage
 
 
 # Union type for all message types

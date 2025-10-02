@@ -246,57 +246,48 @@ class ConversationalStreamingService:
 
         # Normalize artifact_data to a list
         artifacts_list = event.artifact_data if isinstance(event.artifact_data, list) else [event.artifact_data]
+        artifacts_data: list[ArtifactData] = []
+        # Process each artifact individually
+        for artifact_item in artifacts_list:
+            # Convert Pydantic model to dict if needed
+            if hasattr(artifact_item, "model_dump"):
+                artifact_dict = artifact_item.model_dump()
+            elif isinstance(artifact_item, dict):
+                artifact_dict = artifact_item
+            else:
+                logger.warning(f"Unexpected artifact type: {type(artifact_item)}")
+                continue
+
+            # Extract artifact type from the artifact itself, or use event type
+            artifact_type = artifact_dict.get("type", event.artifact_type)
+
+            artifact_data_item: ArtifactData = {
+                "type": artifact_type,  # type: ignore
+                "id": artifact_dict.get("id", f"{event.namespace}_{uuid.uuid4()}"),
+                "data": artifact_dict,  # Store the full artifact dict
+                "namespace": event.namespace,
+                "timestamp": datetime.now().isoformat(),
+            }
+            artifacts_data.append(artifact_data_item)
 
         if recent_ai_msg:
             # Add artifacts to the message (properly typed as ArtifactData)
             if "artifacts" not in recent_ai_msg:
                 recent_ai_msg["artifacts"] = []
 
-            # Process each artifact individually
-            for artifact_item in artifacts_list:
-                # Convert Pydantic model to dict if needed
-                if hasattr(artifact_item, "model_dump"):
-                    artifact_dict = artifact_item.model_dump()
-                elif isinstance(artifact_item, dict):
-                    artifact_dict = artifact_item
-                else:
-                    logger.warning(f"Unexpected artifact type: {type(artifact_item)}")
-                    continue
-
-                # Extract artifact type from the artifact itself, or use event type
-                artifact_type = artifact_dict.get("type", event.artifact_type)
-
-                artifact_data: ArtifactData = {
-                    "type": artifact_type,  # type: ignore
-                    "id": artifact_dict.get("id", f"{event.namespace}_{uuid.uuid4()}"),
-                    "data": artifact_dict,  # Store the full artifact dict
-                    "namespace": event.namespace,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                recent_ai_msg["artifacts"].append(artifact_data)
+                recent_ai_msg["artifacts"].extend(artifacts_data)
 
             logger.info(f"Added {len(artifacts_list)} artifact(s) to message in namespace {event.namespace}")
         else:
-            # Create standalone artifact message if no AI message found
-            # Convert to dict if it's a Pydantic model or list
-            if isinstance(event.artifact_data, list):
-                artifact_data_dict = [
-                    item.model_dump() if hasattr(item, "model_dump") else item for item in event.artifact_data
-                ]
-            elif hasattr(event.artifact_data, "model_dump"):
-                artifact_data_dict = event.artifact_data.model_dump()
-            else:
-                artifact_data_dict = event.artifact_data
-
             artifact_message: ArtifactMessage = {
                 "namespace": event.namespace,
+                "id": f"{event.namespace}_{uuid.uuid4()}",
                 "role": "artifact",
-                "artifact_type": event.artifact_type,
-                "artifact_data": artifact_data_dict,  # type: ignore
+                "artifacts": artifacts_data,
                 "timestamp": datetime.now().isoformat(),
             }
             st.session_state.live_chat.append(artifact_message)
-            logger.info(f"Created standalone artifact message: {event.artifact_type}")
+            logger.info(f"Created standalone artifact message with {len(artifacts_data)} artifact(s)")
 
     def _find_message_in_live_chat(self, message_id: str) -> Optional[Dict[str, Any]]:
         """Find existing message in live_chat by message_id."""

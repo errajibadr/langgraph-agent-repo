@@ -125,16 +125,27 @@ def _render_ai_message(message: AIMessage):
         st.markdown(message["content"])
 
         # Display artifacts if present (type-based rendering)
-        if "artifacts" in message and message["artifacts"]:
-            # Use render cycle to ensure unique keys (increments during live streaming, stays 0 for history)
-            render_cycle = st.session_state.get("live_render_cycle", 0)
-            key_prefix = f"{render_cycle}_artifact_{message.get('id', 'unknown')}"
+        _render_message_artifacts(message)
 
-            selected_value = render_artifacts(message["artifacts"], key_prefix=key_prefix)
 
-            # If a followup artifact was clicked, send it as user input
-            if selected_value:
-                _stream_conversational_response(selected_value)
+def _render_message_artifacts(message: AIMessage | ArtifactMessage):
+    """Render artifacts for a message (helper for both AI and standalone artifact messages).
+
+    Args:
+        message: Message containing artifacts to render
+    """
+    if "artifacts" not in message or not message["artifacts"]:
+        return
+
+    # Use render cycle to ensure unique keys (increments during live streaming, stays 0 for history)
+    render_cycle = st.session_state.get("live_render_cycle", 0)
+    message_id = message.get("id", message.get("timestamp", "unknown"))
+    key_prefix = f"{render_cycle}_artifact_{message_id}"
+
+    selected_value = render_artifacts(message["artifacts"], key_prefix=key_prefix)
+
+    if selected_value:
+        _stream_conversational_response(selected_value)
 
 
 def _render_tool_call(message: ToolCallMessage):
@@ -165,7 +176,7 @@ def _render_tool_call(message: ToolCallMessage):
 
 
 def _render_artifact_message(message: ArtifactMessage):
-    """Render standalone artifact message."""
+    """Render standalone artifact message using unified artifact rendering."""
     # Determine speaker from namespace
     speaker = get_speaker_for_namespace(message.get("namespace", "main"))
     avatar = get_avatar(speaker)
@@ -173,13 +184,7 @@ def _render_artifact_message(message: ArtifactMessage):
     with st.chat_message("assistant", avatar=avatar):
         if speaker != "AI":
             st.caption(f"🤖 {speaker}")
-
-        st.info(f"📋 Created {message['artifact_type']}")
-        # Could expand this to show artifact content based on type
-        if st.button(f"View {message['artifact_type']}", key=f"artifact_{message.get('timestamp', 'unknown')}"):
-            st.json(message["artifact_data"])
-
-    # Stream new response
+        _render_message_artifacts(message)
 
 
 def _stream_conversational_response(user_input: str):
